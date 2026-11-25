@@ -76,7 +76,8 @@ class QBittorrent(_Base):
                       headers={"Referer": self.url})
         if r.status_code == 403:
             raise ClientError("qBittorrent : trop d'échecs de connexion, adresse IP bannie temporairement.")
-        if r.status_code != 200 or r.text.strip() not in ("Ok.", ""):
+        # qBittorrent 4.x : 200 « Ok. » ou « Fails. » ; 5.x : 204 sans contenu, cookie QBT_SID_<port>
+        if r.status_code not in (200, 204) or r.text.strip() not in ("Ok.", ""):
             raise ClientError("qBittorrent : identifiant ou mot de passe refusé.")
 
     def _api(self, method, path, **kw):
@@ -84,7 +85,7 @@ class QBittorrent(_Base):
         if r.status_code == 403:
             self._login()
             r = self._req(method, path, **kw)
-        if r.status_code not in (200, 202):
+        if not 200 <= r.status_code < 300:
             raise ClientError(f"qBittorrent : erreur HTTP {r.status_code} ({r.text[:120].strip()}).")
         return r
 

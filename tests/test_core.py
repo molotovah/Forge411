@@ -606,6 +606,16 @@ class ClientTests(unittest.TestCase):
             self.assertTrue(st.seeding)
             self.assertEqual(seen[0].state, "Vérification")
 
+    def test_qbittorrent5_login_204(self):
+        from unittest import mock
+        from forge411 import clients as CL
+        q = CL.QBittorrent("http://h:8587", "ben", "pw")
+        with mock.patch.object(q.s, "request", return_value=FakeResp(204, text="")):
+            q._login()                                     # qBittorrent 5 : 204 sans « Ok. »
+        with mock.patch.object(q.s, "request", return_value=FakeResp(200, text="Fails.")):
+            with self.assertRaises(CL.ClientError):
+                q._login()
+
     def test_transmission_session_id(self):
         from unittest import mock
         from forge411 import clients as CL

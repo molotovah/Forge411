@@ -2,6 +2,11 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [SemVer](https://semver.org/lang/fr/).
 
+## [2.0.2] - 2026-11-25
+
+### Corrigé
+- qBittorrent 5 : la connexion était refusée à tort (réponse 204 sans « Ok. »).
+
 ## [2.0.1] - 2026-11-25
 
 ### Ajouté
