@@ -77,9 +77,9 @@ Il faut [Python 3.10 ou plus récent](https://www.python.org/downloads/).
 
 ## Premier lancement
 
-Forge411 ouvre ses **paramètres**. Chaque champ a un lien pour obtenir la clé et une aide au survol du « ? ».
+Forge411 ouvre ses **paramètres**, rangés par sections (Compte C411, Bases en ligne, Uploads, Client torrent, Captures, Général). Une pastille signale ce qui manque. Chaque clé a un lien pour l'obtenir, un bouton **Tester** et une aide au survol du « ? ».
 
-<img src="docs/screenshots/10-parametres.png" width="520" alt="Paramètres">
+<img src="docs/screenshots/10-parametres.png" width="640" alt="Paramètres">
 
 | Paramètre | Obligatoire | Où le trouver |
 |---|---|---|
@@ -177,13 +177,15 @@ Forge411 crée le torrent, affiche ce qu'il reste à vérifier, puis l'envoie :
 
 ## Client torrent et seed
 
-<img src="docs/screenshots/18-parametres-client.png" width="520" alt="Client torrent">
+<img src="docs/screenshots/18-parametres-client.png" width="640" alt="Client torrent">
 
 Dans **Paramètres › Client torrent**, choisis qBittorrent, Transmission ou Deluge, ou clique sur **Détecter** : Forge411 cherche les clients sur ce PC et sur la machine de ton dossier de seed. L'aide affichée explique comment activer l'interface web. Après la création du torrent, Forge411 l'ajoute au client avec le dossier de la source comme emplacement, suit la vérification des données et affiche **En seed** : C411 refuse un torrent publié qui n'est pas déjà seedé. Sans client configuré, ajoute le torrent toi-même (voir *Seed automatique*).
 
 Client sur un autre appareil (Docker, NAS) : coche l'option correspondante, puis renseigne la **correspondance des dossiers**, c'est-à-dire le même dossier vu par Forge411 et par le client, par exemple `\\192.168.1.251\Torrents` côté Windows et `/downloads` dans le conteneur. **Proposer** la déduit de ton dossier de seed et du dossier par défaut du client. L'aperçu montre le chemin exact transmis au client. L'interface web du client doit être joignable depuis ton PC et demander un identifiant.
 
 ## Corriger une validation
+
+<img src="docs/screenshots/24-correction.png" width="820" alt="Corriger une validation">
 
 Quand la Team Pending passe ton torrent en **Modification demandée**, clique sur **Corriger une validation** (menu Suivre, ou **Corriger** dans l'Historique). Choisis l'upload et colle le message de la Team Pending, copié depuis *Discussion de modération* sur la page du torrent. Forge411 rouvre l'assistant sur cet upload : le .torrent et le seed restent les mêmes. Chaque étape affiche les points qui la concernent. À l'étape Publication, copie le titre, la description et le NFO corrigés, puis ouvre la page du torrent. Clique sur **Modifier**, colle, enregistre, puis clique sur **Soumettre pour re-examen**. L'API C411 ne permet pas de modifier un torrent à ta place.
 

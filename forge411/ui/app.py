@@ -73,7 +73,7 @@ class App(tk.Tk):
         """Entrée du menu latéral : icône dans une colonne fixe, libellé aligné, survol sur toute la ligne."""
         row = tk.Frame(parent, bg=T.SIDEBAR, cursor="hand2")
         ic = tk.Label(row, text=icon, bg=T.SIDEBAR, fg=T.FAINT, font=T.F_ICON, width=2, anchor="center")
-        ic.pack(side="left", padx=(8, 6), pady=5)
+        ic.pack(side="left", padx=(8, 6), pady=3)
         lb = tk.Label(row, text=text, bg=T.SIDEBAR, fg=T.MUTED, font=T.F_UI_B, anchor="w")
         lb.pack(side="left", fill="x", expand=True)
         parts = (row, ic, lb)
@@ -167,7 +167,7 @@ class App(tk.Tk):
             self.nav.append((row, num, name))
 
         bottom = tk.Frame(side, bg=T.SIDEBAR)
-        bottom.pack(side="bottom", fill="x", padx=12, pady=16)
+        bottom.pack(side="bottom", fill="x", padx=12, pady=12)
         self.side_buttons = {}
         menu = (
             ("Créer", (
@@ -188,7 +188,7 @@ class App(tk.Tk):
         )
         for gi, (title, items) in enumerate(menu):
             tk.Label(bottom, text=title.upper(), bg=T.SIDEBAR, fg=T.FAINT, font=("Segoe UI Semibold", 8),
-                     anchor="w").pack(fill="x", padx=12, pady=(0 if gi == 0 else 10, 2))
+                     anchor="w").pack(fill="x", padx=12, pady=(0 if gi == 0 else 6, 1))
             for key, icon, text, cmd, tip in items:
                 row = self._side_item(bottom, icon, text, cmd)
                 row.pack(fill="x")
@@ -196,7 +196,7 @@ class App(tk.Tk):
                 self.side_buttons[key] = row
         # Pied : version, puis actions discrètes (visite, mises à jour) et lien GitHub
         meta = tk.Frame(bottom, bg=T.SIDEBAR)
-        meta.pack(fill="x", padx=(10, 2), pady=(12, 0))
+        meta.pack(fill="x", padx=(10, 2), pady=(8, 0))
         credit = tk.Label(meta, text=f"v{__version__} · par {AUTHOR}", bg=T.SIDEBAR, fg=T.MUTED, font=T.F_SMALL,
                           cursor="hand2")
         credit.pack(side="left")

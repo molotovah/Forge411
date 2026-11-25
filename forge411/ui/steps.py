@@ -1325,7 +1325,7 @@ class PublishStep(Step):
                 self.draft_btn.pack(side="left", padx=(0, 8), before=self.publish_btn)
             return
         if not box.winfo_ismapped():
-            box.pack(fill="x", pady=(0, 14), before=self.checks_box.master.master)
+            box.pack(fill="x", pady=(0, 14), before=self.recap.master.master)   # action principale : en tête
         self.fix_lbl.configure(text=f"Titre corrigé : {s.name}\nPage : {fix.get('url') or '?'}\n\n"
                                     "1. Ouvre la page du torrent et clique « Modifier ».\n"
                                     "2. Colle le titre, la description et, s'il a changé, le NFO.\n"
