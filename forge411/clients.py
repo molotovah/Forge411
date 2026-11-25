@@ -98,9 +98,16 @@ class QBittorrent(_Base):
                 "autoTMM": "false"}
         if self.label:
             data["category"] = self.label
-        with open(torrent, "rb") as f:
+        # Octets et non fichier ouvert : après un 403 (session expirée), _api rejoue la
+        # requête, et un fichier déjà lu partirait vide (HTTP 415 « not a valid torrent file »).
+        try:
             r = self._api("POST", "/api/v2/torrents/add", data=data,
-                          files={"torrents": (torrent.name, f, "application/x-bittorrent")})
+                          files={"torrents": (Path(torrent).name, Path(torrent).read_bytes(),
+                                              "application/x-bittorrent")})
+        except ClientError as e:
+            if "HTTP 409" in str(e):               # qBittorrent 5.x : torrent déjà présent
+                raise ClientError("qBittorrent a refusé le torrent (déjà présent ?).") from e
+            raise
         if "fail" in r.text.lower():
             raise ClientError("qBittorrent a refusé le torrent (déjà présent ?).")
 
