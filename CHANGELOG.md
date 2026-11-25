@@ -12,6 +12,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [
 - Client torrent : bouton **Détecter**, aide d'activation de l'interface web, champs adaptés au client, option « client sur un autre appareil », bouton **Proposer** pour la correspondance des dossiers et aperçu du chemin transmis au client.
 
 ### Modifié
+- Paramètres repensés : navigation par sections (Compte C411, Bases en ligne, Uploads, Client torrent, Captures, Général), pastilles d'état, lignes compactes libellé / champ, bouton Afficher pour les clés, tests intégrés, Ctrl+S.
 - Nommage XXX Films / VR conforme aux retours de la Team Pending : `[Studio][CATÉGORIE].Titre.Date.Acteur.Langue.Résolution.Source.Audio.Codec-TEAM`. La source suit la résolution, la date suit le titre, et la catégorie non hétéro passe en tête, entre crochets. Ces règles sont aussi vérifiées sur un nom saisi à la main.
 - Image ThePornDB prise sur cdn.theporndb.net : thumb.theporndb.net n'est pas affiché par C411.
 - Publication impossible sans seed : seed vérifié dans le client configuré, sinon case à cocher obligatoire.
