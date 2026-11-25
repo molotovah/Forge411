@@ -237,7 +237,7 @@ Ferme le programme qui utilise le fichier (lecteur vidéo, client torrent), puis
 Ton client doit seeder le torrent avant la publication : configure ton client dans les Paramètres pour que Forge411 le vérifie. En cas de doute, commence par un brouillon.
 
 **Comment mettre Forge411 à jour ?**
-Au démarrage, Forge411 signale une nouvelle version publiée sur GitHub (désactivable dans les Paramètres) ; le bouton **Mises à jour** fait la même vérification. L'exécutable Windows télécharge la nouvelle version et vérifie son empreinte SHA-256. Il attend la fin de l'analyse de l'antivirus Windows, puis la nouvelle version remplace l'ancienne et redémarre, sans script intermédiaire. Depuis le code source : `git pull`.
+Au démarrage puis toutes les 6 heures, Forge411 cherche une nouvelle version sur GitHub (désactivable dans les Paramètres). Si une version existe, une pastille apparaît sur l'icône ⟳ et un badge en haut à droite. Un clic affiche les nouveautés de chaque version depuis la tienne, avant tout téléchargement. L'exécutable Windows télécharge la nouvelle version et vérifie son empreinte SHA-256. Il attend la fin de l'analyse de l'antivirus Windows, puis la nouvelle version remplace l'ancienne et redémarre, sans script intermédiaire. Depuis le code source : `git pull`.
 
 **Où sont mes réglages et le journal ?**
 Dans `%APPDATA%\Forge411` sous Windows (`~/.config/Forge411` sous Linux) : `config.json`, `history.jsonl` et `forge411.log`. Joins le journal si tu signales un problème.

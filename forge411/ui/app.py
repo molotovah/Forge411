@@ -168,6 +168,7 @@ class App(tk.Tk):
 
         bottom = tk.Frame(side, bg=T.SIDEBAR)
         bottom.pack(side="bottom", fill="x", padx=12, pady=12)
+        self.update_rel = None
         self.side_buttons = {}
         menu = (
             ("Créer", (
@@ -206,15 +207,20 @@ class App(tk.Tk):
         Tooltip(credit, f"Forge411, développé par {AUTHOR}. Clic : à propos, licence et services utilisés.")
         self.side_buttons["about"] = credit
         self._github_link(meta).pack(side="right")
-        for key, icon, cmd, tip in (("update", "⟳", self.check_updates, "Mises à jour : cherche une nouvelle version sur GitHub."),
+        self.side_tips = {}
+        for key, icon, cmd, tip in (("update", "⟳", self.open_update, "Mises à jour : cherche une nouvelle version sur GitHub."),
                                     ("tour", "✦", self.start_tour, "Visite guidée : relance la présentation de l'interface.")):
             b = tk.Label(meta, text=icon, bg=T.SIDEBAR, fg=T.FAINT, font=T.F_ICON, cursor="hand2", padx=2)
             b.pack(side="right", padx=(0, 2))
             b.bind("<Button-1>", lambda e, c=cmd: c())
             b.bind("<Enter>", lambda e, w=b: w.configure(fg=T.ACCENT))
-            b.bind("<Leave>", lambda e, w=b: w.configure(fg=T.FAINT))
-            Tooltip(b, tip)
+            b.bind("<Leave>", lambda e, w=b, k=key: w.configure(
+                fg=T.ACCENT if k == "update" and self.update_rel is not None else T.FAINT))
+            self.side_tips[key] = Tooltip(b, tip)
             self.side_buttons[key] = b
+        # Pastille sur l'icône des mises à jour
+        self.upd_dot = tk.Label(meta, text="●", bg=T.SIDEBAR, fg=T.WARNING, font=("Segoe UI", 7), bd=0, padx=0, pady=0)
+        self.upd_dot.bind("<Button-1>", lambda e: self.open_update())
 
         main = tk.Frame(self, bg=T.BG)
         main.pack(side="left", fill="both", expand=True)
@@ -227,6 +233,13 @@ class App(tk.Tk):
         self.h_sub = label(head, "", fg=T.MUTED)
         self.h_sub.pack(fill="x", pady=(2, 0))
         self.h_sub.bind("<Configure>", lambda e: self.h_sub.configure(wraplength=max(e.width - 4, 200)))
+        # Pastille « nouvelle version » en haut à droite (cliquable)
+        self.upd_chip = tk.Label(head, text="", bg=T.ACCENT_SOFT, fg=T.ACCENT, font=T.F_SMALL_B, cursor="hand2",
+                                 padx=12, pady=5)
+        self.upd_chip.bind("<Button-1>", lambda e: self.open_update())
+        self.upd_chip.bind("<Enter>", lambda e: self.upd_chip.configure(bg=T.ACCENT, fg=T.ON_ACCENT))
+        self.upd_chip.bind("<Leave>", lambda e: self.upd_chip.configure(bg=T.ACCENT_SOFT, fg=T.ACCENT))
+        Tooltip(self.upd_chip, "Une nouvelle version est disponible : clique pour lire les nouveautés avant d'installer.")
         # Bandeau du mode correction : points de la Team Pending pour l'étape affichée
         self.fix_banner = tk.Frame(main, bg=T.SURFACE, highlightthickness=1, highlightbackground=T.WARNING)
         self.fix_title = label(self.fix_banner, "", fg=T.WARNING, font=T.F_UI_B, bg=T.SURFACE)
@@ -560,21 +573,23 @@ class App(tk.Tk):
     def open_history(self):
         HistoryDialog(self).show()
 
+    UPDATE_EVERY_MS = 6 * 3600 * 1000              # nouvelle vérification toutes les 6 h
+
     def check_updates(self, manual: bool = True):
-        """Cherche une nouvelle release ; manual : bouton (affiche aussi « à jour » et les erreurs)."""
+        """Cherche une nouvelle release. Automatique : pastille et bandeau seulement ;
+        manuel (bouton) : ouvre les nouveautés, ou indique que tout est à jour."""
         if manual:
             self.status.configure(text="Recherche de mise à jour…")
 
         def found(rel):
             if manual:
                 self.status.configure(text="")
-            if rel is None:
-                if manual:
+            self.set_update(rel)
+            if manual:
+                if rel is None:
                     messagebox.showinfo("Mises à jour", f"Forge411 {__version__} est à jour.", parent=self)
-                return
-            if not manual and rel.version == self.cfg.get("skip_version"):
-                return
-            self._offer_update(rel)
+                else:
+                    self.open_update(force=True)
 
         def failed(e):
             logging.info("Vérification des mises à jour : %s", e)
@@ -583,12 +598,39 @@ class App(tk.Tk):
                 messagebox.showwarning("Mises à jour", str(e), parent=self)
 
         run_bg(updater.check, found, failed)
+        if not manual:
+            self.after(self.UPDATE_EVERY_MS, lambda: self.cfg.get("check_updates") and self.check_updates(False))
 
-    def _offer_update(self, rel):
-        if self.grab_current() is not None:          # une autre fenêtre est ouverte : on repasse plus tard
-            self.after(3000, lambda: self._offer_update(rel))
+    def set_update(self, rel):
+        """Pastille sur ⟳ et bandeau dans la barre latérale si une version plus récente existe."""
+        self.update_rel = rel
+        skipped = rel is not None and rel.version == self.cfg.get("skip_version")
+        upd = self.side_buttons["update"]
+        tip = self.side_tips["update"]
+        if rel is None:
+            self.upd_chip.place_forget()
+            self.upd_dot.place_forget()
+            upd.configure(fg=T.FAINT)
+            tip.text = "Mises à jour : cherche une nouvelle version sur GitHub."
+            return
+        self.upd_dot.place(in_=upd, relx=1.0, rely=0.0, anchor="ne", x=2, y=1)
+        upd.configure(fg=T.ACCENT)
+        tip.text = f"Forge411 {rel.version} est disponible : clique pour lire les nouveautés."
+        if skipped:
+            self.upd_chip.place_forget()
+            return
+        self.upd_chip.configure(text=f"⬆  Forge411 {rel.version} disponible")
+        self.upd_chip.place(relx=1.0, rely=0.0, anchor="ne")
+
+    def open_update(self, force: bool = False):
+        rel = self.update_rel
+        if rel is None:
+            self.check_updates(manual=True)
+            return
+        if self.grab_current() is not None and not force:
             return
         UpdateDialog(self, rel).show()
+        self.set_update(self.update_rel)            # « Ignorer cette version » masque le bandeau
 
     def quit_for_update(self):
         """Fermeture immédiate : le script de mise à jour attend la fin du processus."""

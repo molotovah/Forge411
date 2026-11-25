@@ -89,6 +89,36 @@ def latest() -> Release:
     return rel
 
 
+def changelog_sections(text: str, newer_than: str = __version__, up_to: str = "") -> list:
+    """Sections « ## [x.y.z] - date » du CHANGELOG plus récentes que newer_than (jusqu'à up_to) :
+    [(version, date, texte)], de la plus récente à la plus ancienne."""
+    out = []
+    parts = re.split(r"^## \[([^\]]+)\](?:\s*-\s*(\S+))?\s*$", text or "", flags=re.M)
+    for i in range(1, len(parts) - 2, 3):
+        version, date, body = parts[i], parts[i + 1] or "", parts[i + 2].strip()
+        if not parse_version(version) or parse_version(version) <= parse_version(newer_than):
+            continue
+        if up_to and parse_version(version) > parse_version(up_to):
+            continue
+        out.append((version, date, body))
+    return out
+
+
+def changelog(rel: Release) -> list:
+    """Nouveautés depuis la version installée, lues dans le CHANGELOG du tag publié
+    (repli : notes de la release GitHub)."""
+    try:
+        r = requests.get(f"https://raw.githubusercontent.com/{REPO}/{rel.tag}/CHANGELOG.md", timeout=15,
+                         headers={"User-Agent": USER_AGENT})
+        if r.status_code == 200:
+            secs = changelog_sections(r.text, __version__, rel.version)
+            if secs:
+                return secs
+    except requests.RequestException:
+        pass
+    return [(rel.version, "", rel.notes or "Pas de notes de version.")]
+
+
 def check() -> Optional[Release]:
     """Release plus récente que la version en cours, sinon None."""
     rel = latest()

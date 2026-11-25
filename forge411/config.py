@@ -55,7 +55,8 @@ DEFAULTS = {
     "check_updates": True,
     "skip_version": "",
     # Apparence : system | dark | light
-    "theme": "system",
+    "theme": "dark",
+    "theme_chosen": False,      # vrai dès que l'utilisateur a choisi un thème dans les Paramètres
     # Client torrent (API web) : qbittorrent | transmission | deluge
     "client_kind": "",
     "client_url": "",
@@ -102,6 +103,8 @@ class Config:
                 if isinstance(saved, dict):
                     self._data.update({k: v for k, v in saved.items()
                                        if k not in _OBSOLETE})
+                    if not saved.get("theme_chosen"):      # jamais choisi : sombre par défaut
+                        self._data["theme"] = "dark"
             except (OSError, ValueError):
                 pass
 

@@ -29,7 +29,7 @@ PALETTES = {
         ERROR="#c70036", ERROR_SOFT="#f3d3d8", ERROR_HOVER="#ecc0c8",
         INFO="#1447e6", SECONDARY="#7008e7", UPLOADED="#007a55", DOWNLOADED="#b45309"),
 }
-MODES = {"system": "Système", "dark": "Sombre", "light": "Clair"}
+MODES = {"dark": "Sombre", "light": "Clair", "system": "Système"}
 
 
 def system_mode() -> str:
@@ -58,9 +58,9 @@ def resolve(mode: str) -> str:
 def _configured_mode() -> str:
     try:
         from ..config import Config
-        return Config().get("theme") or "system"
+        return Config().get("theme") or "dark"
     except Exception:
-        return "system"
+        return "dark"
 
 
 MODE = resolve(_configured_mode())

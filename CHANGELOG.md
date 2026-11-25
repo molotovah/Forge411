@@ -2,6 +2,19 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [SemVer](https://semver.org/lang/fr/).
 
+## [2.1.1] - 2026-11-25
+
+### Ajouté
+- Mises à jour : les nouveautés de toutes les versions depuis la tienne (tirées du CHANGELOG) s'affichent avant le téléchargement.
+- Une nouvelle version disponible est signalée par une pastille sur l'icône ⟳ et un badge cliquable en haut à droite. Vérification au démarrage puis toutes les 6 heures, sans fenêtre qui s'ouvre d'elle-même.
+
+### Modifié
+- Thème sombre par défaut. Le thème choisi dans les Paramètres est conservé d'un lancement à l'autre.
+- Notes des releases GitHub reprises du CHANGELOG.
+
+### Corrigé
+- Captures XXX : la fenêtre des liens affiche le minimum exigé (3, ou 4 pour un pack) au lieu du nombre de captures extraites.
+
 ## [2.1.0] - 2026-11-25
 
 ### Ajouté

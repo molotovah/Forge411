@@ -977,5 +977,25 @@ class ClientHelpTests(unittest.TestCase):
             self.assertEqual(seen[-1], 40_000_000)
 
 
+
+class UpdateNotesTests(unittest.TestCase):
+    def test_changelog_sections(self):
+        from forge411.updater import changelog_sections
+        text = ("# Changelog\n\n## [2.2.0] - 2026-12-01\n### Ajouté\n- A\n\n## [2.1.1] - 2026-11-25\n- B\n\n"
+                "## [2.1.0] - 2026-11-20\n- C\n")
+        self.assertEqual([v for v, _, _ in changelog_sections(text, "2.1.0")], ["2.2.0", "2.1.1"])
+        self.assertEqual([v for v, _, _ in changelog_sections(text, "2.1.0", "2.1.1")], ["2.1.1"])
+        self.assertEqual(changelog_sections(text, "2.1.0")[0][2], "### Ajouté\n- A")
+
+    def test_theme_dark_by_default(self):
+        from forge411.config import Config
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "config.json"
+            p.write_text('{"theme": "system"}', encoding="utf-8")
+            self.assertEqual(Config(p).get("theme"), "dark")            # jamais choisi : sombre
+            p.write_text('{"theme": "light", "theme_chosen": true}', encoding="utf-8")
+            self.assertEqual(Config(p).get("theme"), "light")           # choix conservé
+
+
 if __name__ == "__main__":
     unittest.main()

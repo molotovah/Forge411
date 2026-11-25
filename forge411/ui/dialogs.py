@@ -60,7 +60,7 @@ class SettingsDialog(Dialog):
         self.client_auto = tk.BooleanVar(value=bool(cfg.get("client_auto", True)))
         self.screens_host = tk.StringVar(value=SC.HOSTS.get(cfg.get("screens_host") or "pixhost", "pixhost.to"))
         self.screens_count = tk.StringVar(value=str(cfg.get("screens_count") or 4))
-        self.theme = tk.StringVar(value=T.MODES.get(cfg.get("theme") or "system", "Système"))
+        self.theme = tk.StringVar(value=T.MODES.get(cfg.get("theme") or "dark", "Sombre"))
         self.check_updates = tk.BooleanVar(value=bool(cfg.get("check_updates")))
 
         # ── Structure : navigation | contenu, pied de page ───────────────────
@@ -239,7 +239,8 @@ class SettingsDialog(Dialog):
         # ── Général ───────────────────────────────────────────────────────────
         pg = self._page("general", "Général", "Apparence et mises à jour.")
         g = self._group(pg, "Apparence")
-        cell = self._row(g, "Thème", "Système suit le réglage clair / sombre de Windows. Appliqué au redémarrage.")
+        cell = self._row(g, "Thème", "Sombre par défaut. Système suit le réglage clair / sombre de Windows. "
+                                     "Ton choix est conservé ; appliqué au redémarrage.")
         ttk.Combobox(cell, textvariable=self.theme, values=list(T.MODES.values()), state="readonly",
                      width=16).pack(side="left")
         g = self._group(pg, "Mises à jour")
@@ -581,7 +582,9 @@ class SettingsDialog(Dialog):
         values["screens_count"] = int(self.screens_count.get() or 4)
         values["team_tag_auto"] = self.team_auto.get()
         values["team_tag"] = "".join(ch for ch in values.get("team_tag", "") if ch.isalnum())
-        values["theme"] = next((k for k, v in T.MODES.items() if v == self.theme.get()), "system")
+        values["theme"] = next((k for k, v in T.MODES.items() if v == self.theme.get()), "dark")
+        if values["theme"] != (self.cfg.get("theme") or "dark") or self.cfg.get("theme_chosen"):
+            values["theme_chosen"] = True            # choix de l'utilisateur : conservé aux lancements suivants
         self.cfg.update(values)
         self.saved = True
         self.destroy()
@@ -659,15 +662,33 @@ class UpdateDialog(Dialog):
     """Nouvelle version : notes de version, puis téléchargement et redémarrage (exécutable Windows)."""
 
     def __init__(self, parent, rel: "updater.Release"):
-        super().__init__(parent, "Mise à jour", 680, 540)
+        super().__init__(parent, "Mise à jour", 760, 620)
         self.app, self.rel = parent, rel
         body = tk.Frame(self, bg=T.BG)
         body.pack(fill="both", expand=True, padx=20, pady=(20, 0))
         label(body, f"Forge411 {rel.version} est disponible", font=T.F_BIG).pack(fill="x")
-        label(body, f"Tu utilises la version {__version__}.", fg=T.MUTED).pack(fill="x", pady=(2, 12))
-        notes = TextArea(body, height=12, mono=False, readonly=True)
-        notes.set(rel.notes or "Pas de notes de version.")
-        notes.pack(fill="both", expand=True)
+        label(body, f"Tu utilises la version {__version__}. Voici ce qui change avant d'installer :",
+              fg=T.MUTED).pack(fill="x", pady=(2, 12))
+        box = tk.Frame(body, bg=T.SURFACE, highlightthickness=1, highlightbackground=T.BORDER)
+        box.pack(fill="both", expand=True)
+        self.notes = tk.Text(box, height=10, bg=T.SURFACE, fg=T.TEXT, relief="flat", wrap="word", padx=16, pady=12,
+                             font=T.F_UI, cursor="arrow", highlightthickness=0, spacing1=2, spacing3=2)
+        sb = ttk.Scrollbar(box, orient="vertical", command=self.notes.yview)
+        self.notes.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        self.notes.pack(fill="both", expand=True)
+        n = self.notes
+        n.tag_configure("ver", font=T.F_H2, foreground=T.ACCENT, spacing1=10, spacing3=4)
+        n.tag_configure("date", font=T.F_SMALL, foreground=T.FAINT)
+        n.tag_configure("sec", font=T.F_SMALL_B, foreground=T.MUTED, spacing1=8, spacing3=2)
+        n.tag_configure("li", lmargin1=8, lmargin2=24)
+        n.tag_configure("b", font=T.F_UI_B)
+        n.tag_configure("code", font=T.F_MONO, foreground=T.ACCENT)
+        n.tag_configure("muted", foreground=T.MUTED)
+        n.insert("end", "Chargement des nouveautés…", "muted")
+        n.configure(state="disabled")
+        run_bg(lambda: updater.changelog(rel), self._show_notes,
+               lambda e: self._show_notes([(rel.version, "", rel.notes or "Pas de notes de version.")]))
         self.blocker = updater.self_update_blocker(rel)
         self.msg = autowrap(label(body, self.blocker, fg=T.WARNING if self.blocker else T.MUTED, font=T.F_SMALL))
         self.msg.pack(fill="x", pady=(10, 0))
@@ -685,6 +706,37 @@ class UpdateDialog(Dialog):
         self.later.pack(side="left")
         self.skip = Btn(bar, "Ignorer cette version", self.skip_version, kind="ghost")
         self.skip.pack(side="left", padx=(8, 0))
+
+    def _show_notes(self, sections):
+        import re
+        if not self.winfo_exists():
+            return
+        n = self.notes
+        n.configure(state="normal")
+        n.delete("1.0", "end")
+        for version, date, text in sections:
+            n.insert("end", f"Version {version}", "ver")
+            n.insert("end", f"   {date}\n" if date else "\n", ("ver", "date") if date else "ver")
+            for line in text.splitlines():
+                line = line.rstrip()
+                if not line:
+                    continue
+                if line.startswith("### "):
+                    n.insert("end", line[4:].upper() + "\n", "sec")
+                    continue
+                bullet = line.lstrip().startswith(("- ", "* "))
+                body = line.lstrip()[2:] if bullet else line
+                if bullet:
+                    n.insert("end", "•  ", "li")
+                for k, part in enumerate(re.split(r"(\*\*[^*]+\*\*|`[^`]+`)", body)):
+                    if part.startswith("**") and part.endswith("**"):
+                        n.insert("end", part[2:-2], ("b", "li") if bullet else "b")
+                    elif part.startswith("`") and part.endswith("`"):
+                        n.insert("end", part[1:-1], ("code", "li") if bullet else "code")
+                    elif part:
+                        n.insert("end", part, "li" if bullet else ())
+                n.insert("end", "\n", "li" if bullet else ())
+        n.configure(state="disabled")
 
     def skip_version(self):
         self.app.cfg.update({"skip_version": self.rel.version})
