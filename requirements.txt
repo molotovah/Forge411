@@ -1,0 +1,5 @@
+requests>=2.31
+pymediainfo>=6.0
+mutagen>=1.47
+Pillow>=10.0
+pypdf>=4.0

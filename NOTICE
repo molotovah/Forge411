@@ -1,0 +1,25 @@
+Forge411 : outil d'upload pour C411
+Copyright (C) 2026 molotovah <https://github.com/molotovah>
+Code source : https://github.com/molotovah/Forge411
+
+Ce programme est un logiciel libre : vous pouvez le redistribuer et/ou le
+modifier selon les termes de la GNU General Public License telle que publiée
+par la Free Software Foundation, version 3 de la licence.
+
+Ce programme est distribué dans l'espoir qu'il sera utile, mais SANS AUCUNE
+GARANTIE, sans même la garantie implicite de QUALITÉ MARCHANDE ou d'ADÉQUATION
+À UN USAGE PARTICULIER. Voir le fichier LICENSE (texte intégral de la GNU
+General Public License version 3) pour plus de détails.
+
+Conditions supplémentaires (article 7 de la GPL version 3)
+
+a) Article 7 b) : toute version modifiée ou dérivée doit conserver, de façon
+   visible dans son interface, la mention d'auteur « Forge411 par molotovah »
+   et un lien vers le dépôt d'origine https://github.com/molotovah/Forge411
+   (dans Forge411 : pied du menu latéral et fenêtre « À propos »).
+
+b) Article 7 c) : toute version modifiée doit être clairement identifiée comme
+   différente de la version d'origine (nom, numéro de version ou mention
+   « version modifiée »), afin de ne pas être confondue avec Forge411.
+
+Forge411 n'est pas affilié à C411.
