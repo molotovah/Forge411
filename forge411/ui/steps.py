@@ -1016,7 +1016,7 @@ class PresentStep(Step):
                 return
             files = [Path(f) for f in picked]
         if adult:                         # Team Pending XXX : postimg.cc ou zupimages.net uniquement
-            self._screens_manual(mf, files, out, count)
+            self._screens_manual(mf, files, out, count, rule.minimum)
             return
         host = cfg.get("screens_host") or "pixhost"
         what = f"Extraire {count} captures de {mf.path.name}" if mf is not None else f"Envoyer {len(files)} image(s)"
@@ -1081,7 +1081,7 @@ class PresentStep(Step):
         self.render_desc_checks()
         self.app.refresh_nav()
 
-    def _screens_manual(self, mf, files, out, count):
+    def _screens_manual(self, mf, files, out, count, minimum):
         """XXX : captures déposées à la main sur postimg.cc (pas d'envoi automatique), liens collés ensuite."""
         from .. import screens as SC
         from .dialogs import ShotLinksDialog
@@ -1093,7 +1093,7 @@ class PresentStep(Step):
             folder = paths[0].parent if paths else out
             SC.open_folder(folder)
             webbrowser.open(SC.POSTIMG_URL)
-            urls = ShotLinksDialog.ask(self, folder, len(paths), count)
+            urls = ShotLinksDialog.ask(self, folder, len(paths), minimum)
             if urls:
                 self._append_shots(SC.bbcode([SC.Shot(Path(""), url=u, thumb=u, page=u) for u in urls]))
 
