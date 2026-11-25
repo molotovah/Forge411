@@ -2,6 +2,12 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [SemVer](https://semver.org/lang/fr/).
 
+## [2.0.3] - 2026-11-25
+
+### Corrigé
+- qBittorrent : ajout refusé en HTTP 415 quand la session avait expiré (le .torrent était renvoyé vide après reconnexion).
+- qBittorrent 5 : un torrent déjà présent (HTTP 409) n'est plus affiché comme une erreur.
+
 ## [2.0.2] - 2026-11-25
 
 ### Corrigé
