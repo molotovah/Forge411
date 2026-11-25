@@ -888,7 +888,9 @@ class UpdateDialog(Dialog):
 # ═══════════════════════════════════════════════════════════════════════════
 
 class ShotLinksDialog(Dialog):
-    """XXX : liens directs des captures déposées sur postimg.cc (ou zupimages.net)."""
+    """XXX : liens directs des captures déposées sur postimg.cc (ou zupimages.net), en trois étapes."""
+
+    PLACEHOLDER = "Colle ici les liens directs, par exemple :\nhttps://i.postimg.cc/Xyz12345/capture-01.png"
 
     @classmethod
     def ask(cls, parent, folder, extracted: int, minimum: int):
@@ -897,42 +899,103 @@ class ShotLinksDialog(Dialog):
         return d.result
 
     def __init__(self, parent, folder, extracted, minimum):
-        super().__init__(parent, "Captures XXX : postimg.cc", 720, 560)
+        super().__init__(parent, "Captures XXX : postimg.cc", 660, 560)
         from .. import rules
-        self.result, self.minimum, self.hosts = None, minimum, rules.XXX_SHOT_HOSTS
+        from .. import screens as SC
+        self.result, self.minimum, self.hosts, self.folder = None, minimum, rules.XXX_SHOT_HOSTS, folder
         body = tk.Frame(self, bg=T.BG)
-        body.pack(fill="both", expand=True, padx=20, pady=(20, 0))
-        label(body, "Dépose les captures sur postimg.cc", font=T.F_H2).pack(fill="x")
-        steps = (f"1. Le dossier des captures est ouvert ({extracted} image(s)) : {folder}\n"
-                 "2. postimages.org est ouvert dans ton navigateur : glisse-y les images (« Ne pas redimensionner », "
-                 "« Pas d'expiration »).\n"
-                 "3. Une fois l'envoi terminé, choisis « Liens directs », copie la liste et colle-la ci-dessous.\n"
-                 f"La Team Pending exige au moins {minimum} captures hors bannière, sur postimg.cc ou zupimages.net.")
-        autowrap(label(body, steps, fg=T.MUTED)).pack(fill="x", pady=(6, 10))
-        self.text = TextArea(body, height=12)
+        body.pack(fill="both", expand=True, padx=24, pady=(20, 0))
+        label(body, "Héberger les captures sur postimg.cc", font=T.F_BIG).pack(fill="x")
+        label(body, f"La Team Pending exige au moins {minimum} captures, hors bannière, sur postimg.cc ou zupimages.net.",
+              fg=T.MUTED, font=T.F_SMALL).pack(fill="x", pady=(2, 14))
+
+        steps = tk.Frame(body, bg=T.SURFACE, highlightthickness=1, highlightbackground=T.BORDER)
+        steps.pack(fill="x")
+        self._step(steps, 1, "Ouvre le dossier des captures", f"{extracted} image(s) prête(s)",
+                   "Ouvrir le dossier", lambda: SC.open_folder(folder))
+        self._step(steps, 2, "Glisse-les sur postimages.org", "Ne pas redimensionner  ·  Pas d'expiration",
+                   "Ouvrir postimages.org", lambda: webbrowser.open(SC.POSTIMG_URL))
+        self._step(steps, 3, "Copie les liens directs", "Après l'envoi : liste « Liens directs », bouton Copier",
+                   None, None, last=True)
+
+        head = tk.Frame(body, bg=T.BG)
+        head.pack(fill="x", pady=(16, 4))
+        label(head, "Liens directs", font=T.F_UI_B).pack(side="left")
+        self.badge = tk.Label(head, text="", font=T.F_SMALL_B, padx=8, pady=1)
+        self.badge.pack(side="right")
+        self.text = TextArea(body, height=6)
         self.text.pack(fill="both", expand=True)
+        self.text.text.configure(wrap="none")
+        self._placeholder(True)
+        self.text.text.bind("<FocusIn>", lambda e: self._placeholder(False))
+        self.text.text.bind("<FocusOut>", lambda e: self._placeholder(not self.text.get().strip()))
         self.text.text.bind("<KeyRelease>", lambda e: self._count())
-        self.text.text.bind("<<Paste>>", lambda e: self.after(10, self._count))
+        self.text.text.bind("<<Paste>>", lambda e: (self._placeholder(False), self.after(10, self._count)))
         self.msg = label(body, "", fg=T.MUTED, font=T.F_SMALL)
-        self.msg.pack(fill="x", pady=(8, 0))
+        self.msg.pack(fill="x", pady=(6, 0))
+
         bar = tk.Frame(self, bg=T.BG)
-        bar.pack(fill="x", padx=20, pady=16)
+        bar.pack(fill="x", padx=24, pady=16)
         self.ok_btn = Btn(bar, "Ajouter à la description", self.ok, kind="primary")
         self.ok_btn.pack(side="right")
-        Btn(bar, "Ouvrir postimg.cc", lambda: webbrowser.open("https://postimages.org/"), kind="ghost").pack(
-            side="right", padx=(0, 8))
         Btn(bar, "Annuler", self.destroy, kind="ghost").pack(side="left")
         self._count()
 
+    def _step(self, parent, n, title, detail, btn_text, cmd, last=False):
+        row = tk.Frame(parent, bg=T.SURFACE)
+        row.pack(fill="x", padx=16, pady=(12, 12 if last else 0))
+        tk.Label(row, text=str(n), width=3, bg=T.ACCENT_SOFT, fg=T.ACCENT, font=T.F_SMALL_B).pack(
+            side="left", anchor="n", pady=(2, 0))
+        col = tk.Frame(row, bg=T.SURFACE)
+        col.pack(side="left", fill="x", expand=True, padx=(12, 0))
+        label(col, title, font=T.F_UI_B, bg=T.SURFACE).pack(fill="x")
+        label(col, detail, fg=T.MUTED, font=T.F_SMALL, bg=T.SURFACE).pack(fill="x")
+        if btn_text:
+            Btn(row, btn_text, cmd, small=True).pack(side="right")
+        if not last:
+            tk.Frame(parent, bg=T.BORDER, height=1).pack(fill="x", padx=16, pady=(12, 0))
+
+    def _is_placeholder(self):
+        return self.text.text.get("1.0", "end-1c") == self.PLACEHOLDER
+
+    def _placeholder(self, on):
+        t = self.text.text
+        if on and not t.get("1.0", "end-1c").strip():
+            t.insert("1.0", self.PLACEHOLDER)
+            t.configure(fg=T.FAINT)
+        elif not on and self._is_placeholder():
+            t.delete("1.0", "end")
+            t.configure(fg=T.TEXT)
+
     def _links(self):
         from .. import screens as SC
+        if self._is_placeholder():
+            return []
         return SC.direct_links(self.text.get(), self.hosts)
 
     def _count(self):
-        n = len(self._links())
+        import re
+        links = self._links()
+        n = len(links)
+        if not self._is_placeholder():
+            self.text.text.configure(fg=T.TEXT)
+        raw = [] if self._is_placeholder() else re.findall(r"https?://\S+", self.text.get())
+        ignored = len(raw) - n
         ok = n >= self.minimum
-        self.msg.configure(text=f"{n} lien(s) direct(s) reconnu(s) sur {self.minimum} minimum.",
-                           fg=T.SUCCESS if ok else (T.WARNING if n else T.MUTED))
+        self.badge.configure(text=f"{n} / {self.minimum}",
+                             bg=T.SUCCESS_SOFT if ok else (T.WARNING_SOFT if n else T.SURFACE2),
+                             fg=T.SUCCESS if ok else (T.WARNING if n else T.MUTED))
+        if ignored > 0:
+            self.msg.configure(text=f"{ignored} lien(s) ignoré(s) : ce ne sont pas des liens directs d'image "
+                                    "(choisis « Liens directs », pas « Page de l'image »).", fg=T.WARNING)
+        elif n and not ok:
+            self.msg.configure(text=f"Encore {self.minimum - n} capture(s) à ajouter pour atteindre le minimum.",
+                               fg=T.WARNING)
+        elif ok:
+            self.msg.configure(text="✓ Minimum atteint.", fg=T.SUCCESS)
+        else:
+            self.msg.configure(text="", fg=T.MUTED)
+        self.ok_btn.set_text(f"Ajouter {n} capture(s)" if n else "Ajouter à la description")
         self.ok_btn.set_enabled(n > 0)
 
     def ok(self):

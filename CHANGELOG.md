@@ -11,6 +11,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [
 ### Corrigé
 - Corriger une validation : la correction avance seule. La fiche est choisie automatiquement, le nom est recalculé avec les règles actuelles, puis le NFO et la présentation sont régénérés. L'assistant s'arrête seulement à l'étape qui demande une action (par exemple les captures), puis vérifie le seed dans le client à la Publication.
 - Corriger une validation : les éléments absents du nom du fichier seedé (catégorie, langue…) sont repris du titre publié.
+- Captures XXX : fenêtre des liens postimg refaite. Trois étapes numérotées ont chacune leur bouton (ouvrir le dossier, ouvrir postimages.org), avec un exemple de lien dans la zone de collage et un compteur « 2 / 3 ». Les liens qui ne sont pas des liens directs sont signalés.
 
 ## [2.1.2] - 2026-11-25
 
