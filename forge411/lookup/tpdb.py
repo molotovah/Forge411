@@ -159,4 +159,7 @@ class TPDB:
                      genres=tags[:8], people=people, facts=facts,
                      payload_key="tpdbData", payload={"id": uid, "kind": kind},
                      raw={"site": site.get("name") or "", "site_short": site.get("short_name") or "",
-                          "performers": performers, "date": date})
+                          "performers": performers, "date": date, "tags": tags,
+                          "genders": [str(((p.get("extras") or (p.get("parent") or {}).get("extras") or {})
+                                           .get("gender")) or "").lower() for p in it.get("performers") or []
+                                      if isinstance(p, dict)]})

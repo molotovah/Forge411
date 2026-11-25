@@ -475,6 +475,8 @@ class IdentifyStep(Step):
 
         def work():
             ident = client.details(m)
+            from ..translate import french_overview
+            french_overview(ident, self.app.cfg.get("translate_overview", True))
             existing = None
             if ident.provider == "tmdb":
                 try:
@@ -648,6 +650,7 @@ class NameStep(Step):
             tag = self.app.cfg.get("team_tag")
             if tag and self.app.cfg.get("team_tag_auto") and (s.parts.get("team") or "").upper() in ("", "NOTAG") and "team" in s.parts:
                 s.parts["team"] = tag              # source sans tag : ta release, ton tag d'équipe
+            self._published_hints()
             s.details = {d.key: d.value for d in s.profile.details(s.ctx())}
             s.built_for = s.ident_key
             s.name = s.profile.build(s.parts)
@@ -657,6 +660,22 @@ class NameStep(Step):
         self.name.set(s.name)
         self._loading = False
         self.validate()
+
+    def _published_hints(self):
+        """Correction : les éléments absents du nom du fichier (catégorie, langue…) sont repris du titre publié."""
+        import dataclasses
+        s = self.s
+        pub = (getattr(s, "correction", None) or {}).get("published", "")
+        if not pub or not s.src:
+            return
+        alt_src = dataclasses.replace(s.src, path=s.src.path.with_name(pub + ("" if s.src.is_dir else s.src.path.suffix)))
+        try:
+            alt = s.profile.parts(dataclasses.replace(s.ctx(), src=alt_src, parts={}))
+        except Exception:
+            return
+        for p in alt:
+            if p.value and not (s.parts.get(p.key) or "").strip():
+                s.parts[p.key] = p.value
 
     def _render_parts(self):
         self.clear(self.parts_box)
@@ -1346,6 +1365,10 @@ class PublishStep(Step):
         self.render_correction()
         self.render_recap()
         self.render_checks()
+        s = self.s
+        if getattr(s, "correction", None) and CL.make(self.app.cfg) and s.torrent_ready and not s.seeding \
+                and self._seed_cancel is None:
+            self.after(300, self.add_to_client)     # correction : le seed est vérifié dans le client
         self.render_result()
         self.just.set(self.s.slot_justification)
         self._just_changed()

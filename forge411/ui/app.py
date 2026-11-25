@@ -13,6 +13,7 @@ from tkinter import messagebox
 from .. import APP_NAME, AUTHOR, REPO_URL, __version__, updater
 from .. import profile as P
 from ..api import BASE, C411
+from .. import clients as CL
 from .. import session as SESS
 from ..config import PROFILE_HISTORY_PATH, SESSION_PATH, Config, config_dir, migrate_legacy
 from ..lookup import LookupFailed
@@ -280,6 +281,31 @@ class App(tk.Tk):
             pass
         self.status.configure(text=f"Forge411 {__version__} installé.")
 
+    def _autopilot(self, waited: float = 0.0):
+        """Correction : enchaîne seul les étapes prêtes (fiche choisie, nom, NFO et présentation recalculés)
+        et s'arrête sur la première qui demande une action ; à la Publication, vérifie le seed."""
+        s = self.session
+        if not getattr(s, "correction", None) or not s.src:
+            return
+        if self._busy:                              # recherche, analyse, fiche en cours
+            if waited < 120:
+                self.after(300, lambda: self._autopilot(waited + 0.3))
+            return
+        i = self.current
+        if i == len(STEPS) - 1:
+            pub = self.steps[i]
+            if CL.make(self.cfg) and s.torrent_ready and not s.seeding and pub._seed_cancel is None:
+                pub.add_to_client()                 # « aucun seed » : on vérifie dans le client
+            self.status.configure(text="Correction prête : copie les éléments puis soumets-la sur C411.")
+            return
+        st = self.steps[i]
+        if st.ready():
+            self.status.configure(text=f"Correction : {STEPS[i].title} ✓")
+            self._advance_to(i + 1)
+            self.after(400, lambda: self._autopilot(waited))
+        else:
+            self.status.configure(text=f"Correction : action requise à l'étape « {STEPS[i].title} ».")
+
     def render_fix_banner(self, i: int):
         from .. import correction as FIX
         fix = getattr(self.session, "correction", None)
@@ -316,7 +342,7 @@ class App(tk.Tk):
             return
         ih = entry.get("infohash", "")
         fix = {"infohash": ih, "url": entry.get("url") or FIX.torrent_page(ih), "message": message,
-               "points": FIX.parse(message)}
+               "points": FIX.parse(message), "published": entry.get("name", "")}
         torrent = Path(entry["torrent"]) if entry.get("torrent") else None
         if torrent is None or not torrent.exists():
             cand = self.cfg.torrents_dir / f"{entry.get('name', '')}.torrent"
@@ -328,10 +354,12 @@ class App(tk.Tk):
             if torrent is not None:
                 snap.torrent = torrent
             snap.seed, snap.seeding = "", False
+            # Nom, NFO et présentation recalculés avec les règles actuelles
+            snap.built_for = snap.nfo_for = snap.desc_for = ""
+            snap.nfo_edited = snap.desc_edited = False
             self.load_session(snap)
-            steps = [p.step for p in fix["points"] if self.reachable(p.step)]
-            if steps:
-                self.show(min(steps))
+            self.show(0)
+            self.after(300, self._autopilot)
             return
         # Pas de copie locale (upload antérieur à cette version) : on repart de la source seedée
         guess = None
@@ -471,6 +499,7 @@ class App(tk.Tk):
             s.correction, s.torrent = pending
             s.infohash = s.correction.get("infohash", "")
             self.render_fix_banner(self.current)
+            self.after(300, self._autopilot)
 
     def invalidate_torrent(self):
         self.session.torrent_for = ""

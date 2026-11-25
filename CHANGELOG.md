@@ -2,6 +2,16 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [SemVer](https://semver.org/lang/fr/).
 
+## [2.1.3] - 2026-11-25
+
+### Ajouté
+- Résumés des fiches (TMDB, ThePornDB, RAWG, livres…) traduits en français quand ils sont dans une autre langue : Google Traduction, gratuit et sans compte, avec une adresse de secours si la première est limitée. Désactivable dans Paramètres › Bases en ligne.
+- XXX : catégorie non hétéro déduite de la fiche ThePornDB (tags Lesbian, Gay, Trans…, sinon genre des interprètes).
+
+### Corrigé
+- Corriger une validation : la correction avance seule. La fiche est choisie automatiquement, le nom est recalculé avec les règles actuelles, puis le NFO et la présentation sont régénérés. L'assistant s'arrête seulement à l'étape qui demande une action (par exemple les captures), puis vérifie le seed dans le client à la Publication.
+- Corriger une validation : les éléments absents du nom du fichier seedé (catégorie, langue…) sont repris du titre publié.
+
 ## [2.1.2] - 2026-11-25
 
 ### Corrigé

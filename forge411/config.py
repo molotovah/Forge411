@@ -53,6 +53,7 @@ DEFAULTS = {
     "tour_done": False,
     # Mises à jour : vérification au démarrage, version ignorée par l'utilisateur
     "check_updates": True,
+    "translate_overview": True,  # résumés traduits en français (Google Traduction, sans compte)
     "skip_version": "",
     # Apparence : system | dark | light
     "theme": "dark",

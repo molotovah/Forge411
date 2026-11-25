@@ -62,6 +62,7 @@ class SettingsDialog(Dialog):
         self.screens_count = tk.StringVar(value=str(cfg.get("screens_count") or 4))
         self.theme = tk.StringVar(value=T.MODES.get(cfg.get("theme") or "dark", "Sombre"))
         self.check_updates = tk.BooleanVar(value=bool(cfg.get("check_updates")))
+        self.translate = tk.BooleanVar(value=bool(cfg.get("translate_overview", True)))
 
         # ── Structure : navigation | contenu, pied de page ───────────────────
         foot = tk.Frame(self, bg=T.SIDEBAR, highlightthickness=0)
@@ -133,6 +134,9 @@ class SettingsDialog(Dialog):
                                          help="Jeton personnel (compte › API Tokens). La fiche est jointe à l'upload.")
         self._secret_row(g, "Google Books", "google_books_key", url=KEY_LINKS["google_books_key"], sub="Facultatif",
                          help="Sans clé, Forge411 utilise Open Library.")
+        g = self._group(pg, "Résumés")
+        self._check_row(g, self.translate, "Traduire en français les résumés rédigés dans une autre langue "
+                                           "(Google Traduction, gratuit et sans compte)")
         label(pg, "Musique : MusicBrainz et livres : Open Library, sans clé.", fg=T.FAINT, font=T.F_SMALL).pack(
             fill="x", pady=(2, 0))
 
@@ -572,6 +576,7 @@ class SettingsDialog(Dialog):
         values = {k: v.get().strip() for k, v in self.v.items()}
         values["uploader_note"] = self.note.get("1.0", "end-1c").strip()
         values["check_updates"] = self.check_updates.get()
+        values["translate_overview"] = self.translate.get()
         from .. import clients as CL
         from .. import screens as SC
         values["client_kind"] = next((k for k, v in CL.KINDS.items() if v == self.client_kind.get()), "")

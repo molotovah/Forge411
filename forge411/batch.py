@@ -86,6 +86,8 @@ def prepare(item: Item, cfg, c411, lookup_client: Callable, progress: Callable[[
             matches = prof.search(lookup_client(prov), s.query)
             if matches and _similar(matches[0].title, s.query.get("query", "")):
                 s.ident = lookup_client(prov).details(matches[0])
+                from .translate import french_overview
+                french_overview(s.ident, cfg.get("translate_overview", True))
                 if prof.key == "video":
                     s.sub_id = prof.guess_sub(s.ctx())
             else:

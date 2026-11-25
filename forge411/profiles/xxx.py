@@ -171,6 +171,24 @@ def _lang(mf, raw: str) -> str:
     return "VO"
 
 
+def category_from_tpdb(raw: dict) -> str:
+    """Catégorie non hétéro déduite de la fiche ThePornDB : tags, sinon genre des interprètes."""
+    tags = {t.lower() for t in raw.get("tags") or []}
+    for words, cat in (({"lesbian", "lesbians", "girl on girl"}, "LESBIAN"), ({"gay", "gay sex"}, "GAY"),
+                       ({"trans", "transsexual", "transgender", "shemale", "ts", "tgirl"}, "TRANS"),
+                       ({"bisexual"}, "BI")):
+        if tags & words:
+            return cat
+    genders = [g for g in raw.get("genders") or [] if g]
+    if len(genders) >= 2 and all(g == "female" for g in genders):
+        return "LESBIAN"
+    if len(genders) >= 2 and all(g == "male" for g in genders):
+        return "GAY"
+    if any(g.startswith("trans") for g in genders):
+        return "TRANS"
+    return ""
+
+
 def _slug(text: str) -> str:
     """slug() qui garde les tirets internes (ex. Siterip.2019-2024)."""
     return "-".join(x for x in (slug(t) for t in (text or "").split("-")) if x)
@@ -345,6 +363,8 @@ class XxxProfile(Profile):
         mode = "JAV" if re.match(r"^jav\b", raw, re.I) or (jav and not studio) else "Studio"
         category = next((c for c in CATEGORIES[1:] if re.search(rf"(?<![A-Za-z]){c}(?![A-Za-z])", raw, re.I)
                          and (c != "BI" or re.search(r"[.\[]BI[.\]]", raw))), "")
+        if not category and ident:                     # fiche ThePornDB : tags (Lesbian…) ou genre des interprètes
+            category = category_from_tpdb(ident.raw)
         return [
             Part("mode", "Modèle", mode, choices=["Studio", "JAV"], width=8,
                  hint="Studio : [Studio].Titre.Date.Acteur… JAV : JAV.[CODE].Titre.Romanise (code obligatoire)."),

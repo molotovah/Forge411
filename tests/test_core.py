@@ -997,5 +997,15 @@ class UpdateNotesTests(unittest.TestCase):
             self.assertEqual(Config(p).get("theme"), "light")           # choix conservé
 
 
+
+class CategoryTests(unittest.TestCase):
+    def test_category_from_tpdb(self):
+        from forge411.profiles.xxx import category_from_tpdb
+        self.assertEqual(category_from_tpdb({"tags": ["69", "Lesbian"]}), "LESBIAN")
+        self.assertEqual(category_from_tpdb({"tags": [], "genders": ["female", "female", "female"]}), "LESBIAN")
+        self.assertEqual(category_from_tpdb({"tags": ["Transgender"]}), "TRANS")
+        self.assertEqual(category_from_tpdb({"tags": [], "genders": ["female", "male"]}), "")
+
+
 if __name__ == "__main__":
     unittest.main()
