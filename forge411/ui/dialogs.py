@@ -667,10 +667,12 @@ class UpdateDialog(Dialog):
         body = tk.Frame(self, bg=T.BG)
         body.pack(fill="both", expand=True, padx=20, pady=(20, 0))
         label(body, f"Forge411 {rel.version} est disponible", font=T.F_BIG).pack(fill="x")
-        label(body, f"Tu utilises la version {__version__}. Voici ce qui change avant d'installer :",
-              fg=T.MUTED).pack(fill="x", pady=(2, 12))
-        box = tk.Frame(body, bg=T.SURFACE, highlightthickness=1, highlightbackground=T.BORDER)
+        self.head_sub = label(body, f"Tu utilises la version {__version__}. Voici ce qui change avant d'installer :",
+                              fg=T.MUTED)
+        self.head_sub.pack(fill="x", pady=(2, 12))
+        box = self.notes_box = tk.Frame(body, bg=T.SURFACE, highlightthickness=1, highlightbackground=T.BORDER)
         box.pack(fill="both", expand=True)
+        self.body = body
         self.notes = tk.Text(box, height=10, bg=T.SURFACE, fg=T.TEXT, relief="flat", wrap="word", padx=16, pady=12,
                              font=T.F_UI, cursor="arrow", highlightthickness=0, spacing1=2, spacing3=2)
         sb = ttk.Scrollbar(box, orient="vertical", command=self.notes.yview)
@@ -692,7 +694,6 @@ class UpdateDialog(Dialog):
         self.blocker = updater.self_update_blocker(rel)
         self.msg = autowrap(label(body, self.blocker, fg=T.WARNING if self.blocker else T.MUTED, font=T.F_SMALL))
         self.msg.pack(fill="x", pady=(10, 0))
-        self.bar = ttk.Progressbar(body, mode="determinate", maximum=100)
 
         bar = tk.Frame(self, bg=T.BG)
         bar.pack(fill="x", padx=20, pady=16)
@@ -742,44 +743,138 @@ class UpdateDialog(Dialog):
         self.app.cfg.update({"skip_version": self.rel.version})
         self.destroy()
 
+    # ── Installation : trois étapes visibles ─────────────────────────────
+    PHASES = ("Téléchargement", "Vérification par l'antivirus Windows", "Installation et redémarrage")
+
+    def _build_progress(self):
+        self.prog = tk.Frame(self.body, bg=T.SURFACE, highlightthickness=1, highlightbackground=T.BORDER)
+        inner = tk.Frame(self.prog, bg=T.SURFACE)
+        inner.pack(fill="both", expand=True, padx=24, pady=20)
+        label(inner, f"Installation de Forge411 {self.rel.version}", font=T.F_H2, bg=T.SURFACE).pack(fill="x")
+        autowrap(label(inner, "Ne ferme pas Forge411 : il redémarre tout seul à la fin.", fg=T.MUTED,
+                       font=T.F_SMALL, bg=T.SURFACE)).pack(fill="x", pady=(2, 16))
+        self.rows = []
+        for i, name in enumerate(self.PHASES):
+            row = tk.Frame(inner, bg=T.SURFACE)
+            row.pack(fill="x", pady=(0, 12))
+            icon = tk.Label(row, text=str(i + 1), width=3, bg=T.SURFACE2, fg=T.FAINT, font=T.F_SMALL_B)
+            icon.pack(side="left", anchor="n", pady=(1, 0))
+            col = tk.Frame(row, bg=T.SURFACE)
+            col.pack(side="left", fill="x", expand=True, padx=(12, 0))
+            title = label(col, name, fg=T.FAINT, font=T.F_UI_B, bg=T.SURFACE)
+            title.pack(fill="x")
+            detail = autowrap(label(col, "", fg=T.MUTED, font=T.F_SMALL, bg=T.SURFACE))
+            detail.pack(fill="x")
+            bar = ttk.Progressbar(col, mode="determinate", maximum=100)
+            self.rows.append((icon, title, detail, bar))
+
+    def _phase(self, i, state, detail=""):
+        """state : active | done | error."""
+        icon, title, det, bar = self.rows[i]
+        if state == "active":
+            icon.configure(bg=T.ACCENT, fg=T.ON_ACCENT, text=str(i + 1))
+            title.configure(fg=T.TEXT)
+            if not bar.winfo_ismapped():
+                bar.pack(fill="x", pady=(6, 0))
+        elif state == "done":
+            icon.configure(bg=T.SUCCESS_SOFT, fg=T.SUCCESS, text="✓")
+            title.configure(fg=T.MUTED)
+            bar.stop()
+            bar.pack_forget()
+        else:
+            icon.configure(bg=T.ERROR_SOFT, fg=T.ERROR, text="✕")
+            title.configure(fg=T.ERROR)
+            bar.stop()
+            bar.pack_forget()
+        det.configure(text=detail, fg=T.ERROR if state == "error" else T.MUTED)
+
     def start(self):
+        import time
         if self.app._busy:
             self.msg.configure(text="Une opération est en cours : attends qu'elle se termine.", fg=T.WARNING)
             return
         for b in (self.go, self.later, self.skip):
             b.set_enabled(False)
+        self.btn_bar = self.go.master
+        self.btn_bar.pack_forget()                    # rien à cliquer pendant l'installation
+        self.head_sub.configure(text="Installation en cours : suis les étapes ci-dessous.")
         self.protocol("WM_DELETE_WINDOW", lambda: None)
         self.unbind("<Escape>")
-        self.bar.pack(fill="x", pady=(8, 0))
-        self.msg.configure(text="Téléchargement…", fg=T.MUTED)
+        if not hasattr(self, "prog"):
+            self._build_progress()
+        self.notes_box.pack_forget()
+        self.prog.pack(fill="both", expand=True, before=self.msg)
+        self.msg.configure(text="")
+        for k in range(3):
+            icon, title, det, bar = self.rows[k]
+            icon.configure(bg=T.SURFACE2, fg=T.FAINT, text=str(k + 1))
+            title.configure(fg=T.FAINT)
+            det.configure(text="")
+            bar.pack_forget()
+        self._phase(0, "active", "Connexion à GitHub…")
         dest = updater.current_exe().with_name(updater.UPDATE_NAME)
+        t0, last = time.monotonic(), [0.0]
 
         def progress(done, total):
+            now = time.monotonic()
+            if now - last[0] < 0.15 and done != total:
+                return
+            last[0] = now
+            el = max(now - t0, 0.001)
+            speed = done / el
             pct = done * 100 / total if total else 0
-            UI.call(self._progress, pct, f"Téléchargement… {done / 1048576:.1f} Mo"
-                    + (f" sur {total / 1048576:.1f} Mo" if total else ""))
+            text = f"{pct:.0f} %  ·  {done / 1048576:.1f} Mo" + (f" sur {total / 1048576:.1f} Mo" if total else "")
+            if speed > 0 and total:
+                eta = (total - done) / speed
+                text += f"  ·  {speed / 1048576:.1f} Mo/s  ·  reste {int(eta)} s"
+            UI.call(self._download_progress, pct, text)
+
+        def scanning(_):
+            UI.call(self._scan_started)
 
         def work():
             new = updater.download(self.rel, dest, progress)
-            updater.wait_scanned(new, lambda t: UI.call(self._progress, 100, t))
+            updater.wait_scanned(new, scanning)
+            UI.call(self._install_started)
             updater.install(new)              # lancement hors du thread d'interface (fichier parfois retenu)
             return new
         run_bg(work, self._downloaded, self._failed)
 
-    def _progress(self, pct, text):
+    def _download_progress(self, pct, text):
         if self.winfo_exists():
-            self.bar.configure(value=pct)
-            self.msg.configure(text=text)
+            self.rows[0][3].configure(value=pct)
+            self._phase(0, "active", text)
+
+    def _scan_started(self):
+        if not self.winfo_exists():
+            return
+        self._phase(0, "done", f"Fichier vérifié (SHA-256).")
+        self._phase(1, "active", "Windows analyse le nouveau programme : cela peut prendre jusqu'à une minute.")
+        bar = self.rows[1][3]
+        bar.configure(mode="indeterminate")
+        bar.start(12)
+
+    def _install_started(self):
+        if not self.winfo_exists():
+            return
+        self._phase(1, "done", "Aucun blocage.")
+        self._phase(2, "active", "Forge411 va se fermer ; une fenêtre suit l'installation, puis la nouvelle "
+                                 "version s'ouvre.")
+        bar = self.rows[2][3]
+        bar.configure(mode="indeterminate")
+        bar.start(12)
 
     def _downloaded(self, new):
-        self.msg.configure(text="Fichier vérifié. Redémarrage…", fg=T.SUCCESS)
-        self.after(400, self.app.quit_for_update)
+        self.after(1500, self.app.quit_for_update)
 
     def _failed(self, e):
         self.protocol("WM_DELETE_WINDOW", self.destroy)
         self.bind("<Escape>", lambda ev: self.destroy())
-        self.bar.pack_forget()
-        self.msg.configure(text=f"✕ {e}", fg=T.ERROR)
+        for k, (icon, title, det, bar) in enumerate(self.rows):
+            if title.cget("fg") == T.TEXT:                 # étape en cours
+                self._phase(k, "error", str(e))
+        self.msg.configure(text="La mise à jour n'a pas été installée : ta version actuelle est intacte.", fg=T.MUTED)
+        self.btn_bar.pack(fill="x", padx=20, pady=16)
         for b in (self.go, self.later, self.skip):
             b.set_enabled(True)
         self.go.set_text("Réessayer")

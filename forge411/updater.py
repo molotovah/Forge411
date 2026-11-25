@@ -210,18 +210,25 @@ def wait_scanned(path: Path, progress: Callable[[str], None] = None):
 UPDATE_NAME = "Forge411.update.exe"          # nouvelle version téléchargée à côté de Forge411.exe
 
 
-def _wait_pids(pids: list, timeout: float = 90.0):
-    """Attend la fin des processus (Windows : WaitForSingleObject ; ailleurs : sondage)."""
+def _wait_pids(pids: list, timeout: float = 90.0, terminate: bool = False):
+    """Attend la fin des processus (Windows : WaitForSingleObject ; ailleurs : sondage).
+
+    terminate : l'ancienne version a déjà sauvegardé l'upload en cours avant de se fermer ; si elle reste
+    bloquée (cas des versions ≤ 2.1.1), elle est arrêtée pour libérer Forge411.exe."""
     deadline = time.monotonic() + timeout
     if sys.platform == "win32":
         import ctypes
         k32 = ctypes.windll.kernel32
         for pid in pids:
-            h = k32.OpenProcess(0x00100000, False, int(pid))          # SYNCHRONIZE
+            h = k32.OpenProcess(0x00100000 | 0x0001, False, int(pid))   # SYNCHRONIZE | PROCESS_TERMINATE
+            if not h:
+                h = k32.OpenProcess(0x00100000, False, int(pid))
             if not h:
                 continue                                              # déjà terminé
             try:
-                k32.WaitForSingleObject(h, max(0, int((deadline - time.monotonic()) * 1000)))
+                if k32.WaitForSingleObject(h, max(0, int((deadline - time.monotonic()) * 1000))) != 0 and terminate:
+                    k32.TerminateProcess(h, 0)
+                    k32.WaitForSingleObject(h, 5000)
             finally:
                 k32.CloseHandle(h)
         return
@@ -258,32 +265,163 @@ def install(new: Path):
         raise UpdateError(f"Lancement de la nouvelle version impossible : {e}") from e
 
 
-def finish_update(args: list) -> int:
-    """Exécuté par la nouvelle version : remplace Forge411.exe par elle-même puis le relance."""
+def ready_marker() -> Path:
+    """Fichier créé par la nouvelle version dès que sa fenêtre est affichée."""
+    from .config import config_dir
+    return config_dir() / "update-ready.flag"
+
+
+def _swap(target: Path, pids: list, status: Callable[[str], None], wait: float = 90.0) -> bool:
     import logging
     import shutil
-    target, pids = Path(args[0]), args[1:]
-    _wait_pids(pids)
+    status("Fermeture de l'ancienne version…")
+    _wait_pids(pids, wait, terminate=True)
     me = Path(sys.executable).resolve()
     tmp = target.with_name(target.name + ".new")
+    status("Installation de la nouvelle version…")
+    last = None
     for _ in range(60):                       # antivirus ou explorateur : le fichier peut rester pris un moment
         try:
             shutil.copyfile(me, tmp)
             os.replace(tmp, target)
-            break
+            return True
         except OSError as e:
             last = e
             time.sleep(0.5)
+    logging.error("Mise à jour : remplacement de %s impossible (%s)", target, last)
+    try:
+        tmp.unlink()
+    except OSError:
+        pass
+    return False
+
+
+def finish_update(args: list, window: bool = True) -> int:
+    """Exécuté par la nouvelle version : remplace Forge411.exe par elle-même puis le relance.
+    Une petite fenêtre suit l'opération jusqu'à l'ouverture de la nouvelle version."""
+    target, pids = Path(args[0]), args[1:]
+    me = Path(sys.executable).resolve()
+    marker = ready_marker()
+    try:
+        marker.unlink()
+    except OSError:
+        pass
+    ui = _Splash() if window else None
+    result = {}
+
+    def work(retry=False):
+        ok = _swap(target, pids, ui.status if ui else (lambda t: None), 5.0 if retry else 15.0)
+        result["ok"] = ok
+        if not ok and ui:                     # Forge411.exe encore ouvert : on l'explique et on propose de réessayer
+            ui.failed(f"Impossible de remplacer {target.name} : une fenêtre de Forge411 est sans doute encore "
+                      "ouverte. Ferme-la, puis clique sur Réessayer.",
+                      retry=lambda: threading.Thread(target=work, args=(True,), daemon=True).start(),
+                      fallback=lambda: (_launch(me), ui.close()))
+            return
+        if ui:
+            ui.status("Ouverture de Forge411…")
+        if ok:
+            _launch(target, "--cleanup-update", str(me))
+        else:
+            _launch(me)                       # sans fenêtre : la nouvelle version démarre depuis son propre fichier
+        # La fenêtre reste jusqu'à l'affichage de la nouvelle version (au plus 40 s)
+        if ui:
+            deadline = time.monotonic() + 40
+            while time.monotonic() < deadline and not marker.exists():
+                time.sleep(0.2)
+            ui.close()
+    import threading
+    if ui is None:
+        work()
     else:
-        logging.error("Mise à jour : remplacement de %s impossible (%s)", target, last)
+        threading.Thread(target=work, daemon=True).start()
+        ui.run()
+    return 0 if result.get("ok") else 1
+
+
+class _Splash:
+    """Fenêtre minimale (sans dépendance au thème) : titre, étape en cours, barre animée."""
+
+    def __init__(self):
+        import queue
+        import tkinter as tk
+        from tkinter import ttk
+        self.q = queue.Queue()
+        self.root = r = tk.Tk()
+        r.title("Mise à jour de Forge411")
+        r.configure(bg="#0a1712")
+        r.resizable(False, False)
+        w, h = 440, 150
+        r.geometry(f"{w}x{h}+{(r.winfo_screenwidth() - w) // 2}+{(r.winfo_screenheight() - h) // 3}")
+        r.attributes("-topmost", True)
+        r.protocol("WM_DELETE_WINDOW", lambda: None)
         try:
-            tmp.unlink()
-        except OSError:
+            from importlib.resources import files
+            self._icon = tk.PhotoImage(file=str(files("forge411") / "assets" / "forge411.png"))
+            r.iconphoto(True, self._icon)
+            r.update_idletasks()
+            from .ui.theme import dark_title_bar
+            dark_title_bar(r)
+        except Exception:
             pass
-        _launch(me)                           # la nouvelle version démarre quand même, depuis son propre fichier
-        return 1
-    _launch(target, "--cleanup-update", str(me))
-    return 0
+        tk.Label(r, text=f"Mise à jour de Forge411 {__version__}", bg="#0a1712", fg="#d5eadf",
+                 font=("Segoe UI Semibold", 12), anchor="w").pack(fill="x", padx=24, pady=(22, 2))
+        self.lbl = tk.Label(r, text="Préparation…", bg="#0a1712", fg="#9db9ac", font=("Segoe UI", 9), anchor="w")
+        self.lbl.pack(fill="x", padx=24)
+        s = ttk.Style(r)
+        s.theme_use("clam")
+        s.configure("U.Horizontal.TProgressbar", background="#00d492", troughcolor="#19231f", bordercolor="#19231f",
+                    lightcolor="#00d492", darkcolor="#00d492")
+        self.bar = ttk.Progressbar(r, mode="indeterminate", style="U.Horizontal.TProgressbar")
+        self.bar.pack(fill="x", padx=24, pady=(14, 0))
+        self.bar.start(12)
+
+    def status(self, text):
+        self.q.put(("text", text))
+
+    def failed(self, text, retry, fallback):
+        self.q.put(("failed", (text, retry, fallback)))
+
+    def _show_failed(self, text, retry, fallback):
+        import tkinter as tk
+        self.bar.stop()
+        self.bar.pack_forget()
+        self.lbl.configure(text=text, fg="#ff637e", wraplength=390, justify="left")
+        self.root.geometry("440x190")
+        if getattr(self, "btns", None) is None:
+            self.btns = tk.Frame(self.root, bg="#0a1712")
+            self.btns.pack(fill="x", padx=24, pady=(14, 0))
+
+            def again():
+                self.btns.pack_forget()
+                self.lbl.configure(fg="#9db9ac")
+                self.bar.pack(fill="x", padx=24, pady=(14, 0))
+                self.bar.start(12)
+                retry()
+            for text_, cmd, bg, fg in (("Réessayer", again, "#00d492", "#03140e"),
+                                       ("Ouvrir sans remplacer", fallback, "#19231f", "#d5eadf")):
+                tk.Button(self.btns, text=text_, command=cmd, bg=bg, fg=fg, relief="flat", padx=12, pady=4,
+                          font=("Segoe UI Semibold", 9), cursor="hand2").pack(side="left", padx=(0, 8))
+        else:
+            self.btns.pack(fill="x", padx=24, pady=(14, 0))
+
+    def close(self):
+        self.q.put(("close", None))
+
+    def run(self):
+        def poll():
+            while not self.q.empty():
+                kind, val = self.q.get()
+                if kind == "close":
+                    self.root.destroy()
+                    return
+                if kind == "failed":
+                    self._show_failed(*val)
+                    continue
+                self.lbl.configure(text=val)
+            self.root.after(100, poll)
+        self.root.after(100, poll)
+        self.root.mainloop()
 
 
 def cleanup_update(path: str):

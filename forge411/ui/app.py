@@ -264,6 +264,22 @@ class App(tk.Tk):
         self.body.pack(fill="both", expand=True, padx=(32, 18))
 
     # ── Navigation ────────────────────────────────────────────────────────
+    def bring_to_front(self):
+        """Après une mise à jour : Windows ouvre la nouvelle fenêtre derrière la fenêtre active ; on la remonte."""
+        try:
+            self.deiconify()
+            self.lift()
+            self.attributes("-topmost", True)
+            self.focus_force()
+            self.after(1200, lambda: self.attributes("-topmost", False))
+            if sys.platform == "win32":
+                import ctypes
+                hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
+                ctypes.windll.user32.SetForegroundWindow(hwnd)
+        except Exception:
+            pass
+        self.status.configure(text=f"Forge411 {__version__} installé.")
+
     def render_fix_banner(self, i: int):
         from .. import correction as FIX
         fix = getattr(self.session, "correction", None)
@@ -633,7 +649,10 @@ class App(tk.Tk):
         self.set_update(self.update_rel)            # « Ignorer cette version » masque le bandeau
 
     def quit_for_update(self):
-        """Fermeture immédiate : le script de mise à jour attend la fin du processus."""
+        """Fermeture immédiate : la nouvelle version attend la fin de ce processus pour remplacer Forge411.exe.
+
+        Appelée depuis une fenêtre modale, destroy() seul laisse la boucle Tk en vie (fichier verrouillé) :
+        le processus se termine donc explicitement."""
         SESS.save(self.session, SESSION_PATH)          # l'upload en cours sera proposé au redémarrage
         self._stop_seed()
         try:
@@ -641,7 +660,11 @@ class App(tk.Tk):
                 self.cfg.update({"window_geometry": self.geometry()})
         except Exception:
             pass
-        self.destroy()
+        try:
+            self.destroy()
+        finally:
+            logging.shutdown()
+            os._exit(0)
 
     def start_tour(self):
         if self.current != 0:
@@ -723,9 +746,12 @@ def main():
         return
     if "--finish-update" in sys.argv:                  # nouvelle version : remplace Forge411.exe puis le relance
         return updater.finish_update(sys.argv[sys.argv.index("--finish-update") + 1:])
-    if "--cleanup-update" in sys.argv:
+    app = App()
+    if "--cleanup-update" in sys.argv:             # lancé par la mise à jour : signale que la fenêtre est là
         updater.cleanup_update(sys.argv[sys.argv.index("--cleanup-update") + 1])
-    App().mainloop()
+        app.after(400, app.bring_to_front)
+        app.after(600, lambda: updater.ready_marker().touch())
+    app.mainloop()
     os._exit(0)                                        # aucun thread restant ne retient le processus
 
 

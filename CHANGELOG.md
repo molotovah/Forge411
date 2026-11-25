@@ -2,6 +2,13 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [SemVer](https://semver.org/lang/fr/).
 
+## [2.1.2] - 2026-11-25
+
+### Corrigé
+- Mise à jour : l'ancienne fenêtre ne se fermait pas après « Installer et redémarrer ». Forge411.exe restait verrouillé : la nouvelle version démarrait depuis le fichier temporaire, sans remplacer l'exécutable. Elle se ferme désormais. Si une ancienne version (2.1.1 ou avant) reste bloquée, elle est arrêtée au bout de 15 secondes, l'upload en cours étant déjà sauvegardé.
+- Mise à jour : la progression est visible du début à la fin. La fenêtre suit trois étapes : téléchargement (pourcentage, débit, temps restant), vérification par l'antivirus Windows, installation. Une fenêtre « Mise à jour de Forge411 » reste ensuite affichée jusqu'à l'ouverture de la nouvelle version, qui passe au premier plan.
+- Si le remplacement échoue malgré tout, la fenêtre d'installation l'explique et propose « Réessayer ».
+
 ## [2.1.1] - 2026-11-25
 
 ### Ajouté

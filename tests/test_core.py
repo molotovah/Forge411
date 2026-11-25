@@ -896,7 +896,7 @@ class UpdaterTests(unittest.TestCase):
             launched = []
             with mock.patch.object(updater.sys, "executable", str(new)), \
                     mock.patch.object(updater, "_launch", lambda exe, *a: launched.append((Path(exe).name, a))):
-                self.assertEqual(updater.finish_update([str(target)]), 0)
+                self.assertEqual(updater.finish_update([str(target)], window=False), 0)
             self.assertEqual(target.read_bytes(), b"MZnew")
             self.assertEqual(launched, [("Forge411.exe", ("--cleanup-update", str(new.resolve())))])
 
