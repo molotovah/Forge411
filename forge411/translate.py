@@ -88,11 +88,46 @@ def to_french(text: str) -> tuple:
         return text, ""
 
 
+def protect(text: str, names: list) -> tuple:
+    """Remplace les noms propres (interprètes, studio…) par des jetons que la traduction ne touche pas."""
+    words = []
+    for n in names:
+        n = (n or "").strip()
+        if n:
+            words.append(n)
+            words += [w for w in re.split(r"[\s.\-]+", n) if len(w) >= 3]
+    # « Hannah Blue », « Amber Rose » : prénom connu suivi d'un nom à majuscule, protégés ensemble
+    for w in list(words):
+        if " " not in w:
+            words += [f"{w} {m.group(1)}" for m in re.finditer(rf"(?<!\w){re.escape(w)}\s+([A-Z][a-z]+)\b", text)]
+    table = {}
+    for w in sorted(set(words), key=len, reverse=True):
+        tok = f"ZQ{len(table)}QZ"
+        new = re.sub(rf"(?<![\w]){re.escape(w)}(?![\w])", tok, text)
+        if new != text:
+            table[tok], text = w, new
+    return text, table
+
+
+def restore(text: str, table: dict) -> str:
+    for tok, w in table.items():
+        text = re.sub(tok, w, text, flags=re.I)
+    return text
+
+
 def french_overview(ident, enabled: bool = True):
-    """Résumé de la fiche traduit en français s'il est dans une autre langue (langue d'origine dans raw)."""
+    """Résumé de la fiche traduit en français s'il est dans une autre langue (langue d'origine dans raw).
+    Les noms des interprètes et du studio ne sont pas traduits (Amber, Blue, White…)."""
     if not enabled or ident is None or not (ident.overview or "").strip():
         return ident
-    text, lang = to_french(ident.overview)
+    raw = ident.raw or {}
+    names = list(raw.get("performers") or []) + [raw.get("site") or ""]
+    names += [p.strip() for _, v in (ident.people or []) for p in str(v).split(",")]
+    masked, table = protect(ident.overview, names)
+    text, lang = to_french(masked)
+    text = restore(text, table)
+    if lang.startswith("fr") or text == masked:
+        text = ident.overview
     if text != ident.overview:
         ident.raw = {**(ident.raw or {}), "overview_original": ident.overview, "overview_lang": lang}
         ident.overview = text

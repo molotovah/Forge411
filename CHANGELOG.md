@@ -2,6 +2,11 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [SemVer](https://semver.org/lang/fr/).
 
+## [Non publié]
+
+### Corrigé
+- Traduction des résumés : les noms des interprètes et du studio ne sont plus traduits (Amber, Hannah Blue, Roxanne White…).
+
 ## [2.1.3] - 2026-11-25
 
 ### Ajouté

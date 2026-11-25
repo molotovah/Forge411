@@ -1007,5 +1007,16 @@ class CategoryTests(unittest.TestCase):
         self.assertEqual(category_from_tpdb({"tags": [], "genders": ["female", "male"]}), "")
 
 
+
+class TranslateTests(unittest.TestCase):
+    def test_names_are_protected(self):
+        from forge411.translate import protect, restore
+        text = "Totals: Hannah Blue - 2, Roxanne White - 3. Amber kisses Hannah at ExCoGiGirls."
+        masked, table = protect(text, ["Amber Moore", "Hannah", "Roxanne", "ExCoGiGirls"])
+        for name in ("Hannah", "Blue", "White", "Amber", "ExCoGiGirls"):
+            self.assertNotIn(name, masked)
+        self.assertEqual(restore(masked, table), text)
+
+
 if __name__ == "__main__":
     unittest.main()
