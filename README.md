@@ -157,7 +157,7 @@ La sous-catégorie et les options C411 sont préremplies ; les options obligatoi
 Forge411 crée le torrent, affiche ce qu'il reste à vérifier, puis l'envoie :
 
 - **Enregistrer en brouillon** : tout part sur C411 sans être publié. Sur la page d'upload du site, clique sur **Brouillons** puis sur ton brouillon pour le relire et le publier. Idéal pour commencer.
-- **Publier sur C411** : publication directe. Ton client torrent doit déjà seeder le torrent.
+- **Publier sur C411** : publication directe. Le bouton reste grisé tant que le seed n'est pas vérifié (client configuré) ou confirmé (case à cocher), et tant que la présentation n'a pas ses captures.
 
 <img src="docs/screenshots/09-publication.png" width="820" alt="Publication">
 
@@ -179,9 +179,13 @@ Forge411 crée le torrent, affiche ce qu'il reste à vérifier, puis l'envoie :
 
 <img src="docs/screenshots/18-parametres-client.png" width="520" alt="Client torrent">
 
-Dans **Paramètres › Client torrent**, indique qBittorrent, Transmission ou Deluge (interface web activée). Après la création du torrent, Forge411 l'ajoute au client avec le dossier de la source comme emplacement, suit la vérification des données et affiche **En seed** : C411 refuse un torrent publié qui n'est pas déjà seedé. Sans client configuré, ajoute le torrent toi-même (voir *Seed automatique*).
+Dans **Paramètres › Client torrent**, choisis qBittorrent, Transmission ou Deluge, ou clique sur **Détecter** : Forge411 cherche les clients sur ce PC et sur la machine de ton dossier de seed. L'aide affichée explique comment activer l'interface web. Après la création du torrent, Forge411 l'ajoute au client avec le dossier de la source comme emplacement, suit la vérification des données et affiche **En seed** : C411 refuse un torrent publié qui n'est pas déjà seedé. Sans client configuré, ajoute le torrent toi-même (voir *Seed automatique*).
 
-Client sur un autre appareil (Docker, NAS) : renseigne la **correspondance des dossiers**, c'est-à-dire le même dossier vu par Forge411 et par le client, par exemple `\\192.168.1.251\Torrents` côté Windows et `/downloads` dans le conteneur. L'interface web du client doit être joignable depuis ton PC et demander un identifiant.
+Client sur un autre appareil (Docker, NAS) : coche l'option correspondante, puis renseigne la **correspondance des dossiers**, c'est-à-dire le même dossier vu par Forge411 et par le client, par exemple `\\192.168.1.251\Torrents` côté Windows et `/downloads` dans le conteneur. **Proposer** la déduit de ton dossier de seed et du dossier par défaut du client. L'aperçu montre le chemin exact transmis au client. L'interface web du client doit être joignable depuis ton PC et demander un identifiant.
+
+## Corriger une validation
+
+Quand la Team Pending passe ton torrent en **Modification demandée**, clique sur **Corriger une validation** (menu Suivre, ou **Corriger** dans l'Historique). Choisis l'upload et colle le message de la Team Pending, copié depuis *Discussion de modération* sur la page du torrent. Forge411 rouvre l'assistant sur cet upload : le .torrent et le seed restent les mêmes. Chaque étape affiche les points qui la concernent. À l'étape Publication, copie le titre, la description et le NFO corrigés, puis ouvre la page du torrent. Clique sur **Modifier**, colle, enregistre, puis clique sur **Soumettre pour re-examen**. L'API C411 ne permet pas de modifier un torrent à ta place.
 
 ## Doublons, slots et justification
 
@@ -191,7 +195,7 @@ Client sur un autre appareil (Docker, NAS) : renseigne la **correspondance des d
 
 ## Captures d'écran
 
-Pour une vidéo, **Ajouter des captures** (étape Présentation) extrait des images avec ffmpeg, les envoie sur pixhost ou catbox (hébergeurs acceptés par C411 ; le contenu XXX passe par pixhost, marqué adulte) et ajoute les vignettes à la description. L'envoi demande toujours ta confirmation. Sans ffmpeg sur le PC, Forge411 propose de l'installer en un clic (Paramètres › Captures d'écran, ou au premier clic sur « Ajouter des captures ») : version stable officielle (FFmpeg-Builds, LGPL) téléchargée depuis GitHub, vérifiée par SHA-256, environ 75 Mo. Un ffmpeg déjà présent (PATH, winget) est utilisé en priorité.
+Pour une vidéo, **Ajouter des captures** (étape Présentation) extrait des images avec ffmpeg, les envoie sur pixhost ou catbox (hébergeurs acceptés par C411) et ajoute les vignettes à la description. Sans vidéo, choisis des images sur le disque. Pour le XXX, la Team Pending ne compte que postimg.cc et zupimages.net. Forge411 extrait les captures dans un dossier et ouvre postimages.org : tu y glisses les images, puis tu colles la liste des **liens directs**. Minimum exigé hors bannière : XXX 3 (4 pour un pack), jeux 3, applications 2. Les images hors liste blanche C411 sont signalées. L'envoi demande toujours ta confirmation. Sans ffmpeg sur le PC, Forge411 propose de l'installer en un clic (Paramètres › Captures d'écran, ou au premier clic sur « Ajouter des captures ») : version stable officielle (FFmpeg-Builds, LGPL) téléchargée depuis GitHub, vérifiée par SHA-256, environ 75 Mo. Un ffmpeg déjà présent (PATH, winget) est utilisé en priorité.
 
 ## Reprise d'un upload
 
@@ -231,7 +235,7 @@ Ferme le programme qui utilise le fichier (lecteur vidéo, client torrent), puis
 Ton client doit seeder le torrent avant la publication : configure ton client dans les Paramètres pour que Forge411 le vérifie. En cas de doute, commence par un brouillon.
 
 **Comment mettre Forge411 à jour ?**
-Au démarrage, Forge411 signale une nouvelle version publiée sur GitHub (désactivable dans les Paramètres) ; le bouton **Mises à jour** fait la même vérification. L'exécutable Windows télécharge la nouvelle version, vérifie son empreinte SHA-256 puis redémarre. Depuis le code source : `git pull`.
+Au démarrage, Forge411 signale une nouvelle version publiée sur GitHub (désactivable dans les Paramètres) ; le bouton **Mises à jour** fait la même vérification. L'exécutable Windows télécharge la nouvelle version et vérifie son empreinte SHA-256. Il attend la fin de l'analyse de l'antivirus Windows, puis la nouvelle version remplace l'ancienne et redémarre, sans script intermédiaire. Depuis le code source : `git pull`.
 
 **Où sont mes réglages et le journal ?**
 Dans `%APPDATA%\Forge411` sous Windows (`~/.config/Forge411` sous Linux) : `config.json`, `history.jsonl` et `forge411.log`. Joins le journal si tu signales un problème.

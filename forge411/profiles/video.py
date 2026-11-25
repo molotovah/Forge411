@@ -266,6 +266,10 @@ class VideoProfile(Profile):
             [p.get(k, "") for k in ("language", "resolution", "source", "light", "hdr", "audio", "video")]
         return ".".join(x for x in body if x) + f"-{p.get('team') or 'NOTAG'}"
 
+    def shot_rule(self, ctx):
+        from ..rules import ShotRule
+        return ShotRule(recommended=3)
+
     def details(self, ctx):
         raw = ctx.src.stem
         return [Detail("platform", "Plateforme VOD", detect_platform(raw),

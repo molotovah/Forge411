@@ -38,7 +38,9 @@ forge411/
 │   └── __init__.py       registre et détection
 ├── session.py            état de l'upload en cours
 ├── config.py             réglages, liens des clés, historique
-├── updater.py            mises à jour : release GitHub, téléchargement vérifié, remplacement de l'exe
+├── updater.py            mises à jour : release GitHub, téléchargement vérifié, remplacement de l'exe par la nouvelle version (--finish-update)
+├── rules.py              règles de présentation C411 : hébergeurs d'images autorisés, captures minimales
+├── correction.py         retour de la Team Pending : découpage du message par étape, page du torrent
 ├── profile.py            profil C411 (GET /api/user/profile) : lecture, mise en forme, relevés et évolution
 ├── clients.py            clients torrent (qBittorrent, Transmission, Deluge) : ajout et suivi jusqu'au seed
 ├── catalog.py            doublons et estimation des slots C411 à partir du nom

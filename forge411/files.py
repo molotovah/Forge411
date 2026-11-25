@@ -110,19 +110,60 @@ def move(src: Source, dest_dir: Path, progress: Callable[[float], None] = None) 
     for f in files:
         target = dest / f.relative_to(src.path) if src.is_dir else dest
         target.parent.mkdir(parents=True, exist_ok=True)
-        with open(f, "rb") as fi, open(target, "wb") as fo:
-            while True:
-                chunk = fi.read(8 * 1024 * 1024)
-                if not chunk:
-                    break
-                fo.write(chunk)
-                done += len(chunk)
-                if progress:
-                    progress(done / total)
-        shutil.copystat(f, target)
+        base = done
+        copy_file(f, target, (lambda n, b=base: progress((b + n) / total)) if progress else None)
+        done += f.stat().st_size
     if src.is_dir:
         shutil.rmtree(src.path)
     else:
         src.path.unlink()
     _relocate(src, dest)
     return dest
+
+
+def copy_file(src: Path, dst: Path, progress: Callable[[int], None] = None):
+    """Copie rapide : CopyFileExW sous Windows (copie native, efficace vers un partage réseau),
+    sinon blocs de 16 Mo. progress reçoit le nombre d'octets copiés."""
+    if os.name == "nt":
+        try:
+            _copy_win(src, dst, progress)
+            return
+        except OSError:
+            if dst.exists():
+                dst.unlink()
+    with open(src, "rb") as fi, open(dst, "wb") as fo:
+        n = 0
+        while True:
+            chunk = fi.read(16 * 1024 * 1024)
+            if not chunk:
+                break
+            fo.write(chunk)
+            n += len(chunk)
+            if progress:
+                progress(n)
+    shutil.copystat(src, dst)
+
+
+def _copy_win(src: Path, dst: Path, progress):
+    import ctypes
+    from ctypes import wintypes
+    LARGE = ctypes.c_longlong
+    Routine = ctypes.WINFUNCTYPE(wintypes.DWORD, LARGE, LARGE, LARGE, LARGE, wintypes.DWORD, wintypes.DWORD,
+                                 wintypes.HANDLE, wintypes.HANDLE, wintypes.LPVOID)
+    last = [0.0]
+
+    def cb(total, done, *_):
+        import time
+        now = time.monotonic()
+        if progress and (now - last[0] > 0.2 or done == total):
+            last[0] = now
+            progress(int(done))
+        return 0                                    # PROGRESS_CONTINUE
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.CopyFileExW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR, Routine, wintypes.LPVOID,
+                                ctypes.POINTER(wintypes.BOOL), wintypes.DWORD]
+    k32.CopyFileExW.restype = wintypes.BOOL
+    flags = 0x1000 if src.stat().st_size > 256 * 1024 * 1024 else 0     # COPY_FILE_NO_BUFFERING : gros fichiers
+    routine = Routine(cb)
+    if not k32.CopyFileExW(str(src), str(dst), routine, None, None, flags):
+        raise ctypes.WinError(ctypes.get_last_error())

@@ -356,6 +356,10 @@ class GameProfile(_SoftBase):
             c.errors.append("Jeu PS4 / PS5 : l'identifiant CUSA… ou PPSA… est obligatoire.")
         return c
 
+    def shot_rule(self, ctx):
+        from ..rules import ShotRule
+        return ShotRule(minimum=3)          # checklist C411 : au moins 3 captures en plus des bannières
+
     def details(self, ctx):
         s = ctx.analysis
         mode, _, _ = game_mode(s)
@@ -468,6 +472,10 @@ class AppProfile(_SoftBase):
             name += f"-{p['team']}"
         inner = " ".join(x for x in (os_, lang, p.get("type", "")) if x)
         return name + (f" [{inner}]" if inner else "")
+
+    def shot_rule(self, ctx):
+        from ..rules import ShotRule
+        return ShotRule(minimum=2)          # checklist C411 : logo et au moins 2 à 3 captures
 
     def details(self, ctx):
         s = ctx.analysis

@@ -2,10 +2,12 @@
 Captures d'écran d'une vidéo (ffmpeg) et envoi vers un hébergeur d'images.
 
 Les hébergeurs proposés figurent dans la liste blanche d'images de C411
-(files.catbox.moe, pixhost.to). Pour le contenu adulte, pixhost est utilisé
-avec le marquage « adulte » (content_type = 1).
+(files.catbox.moe, pixhost.to). Pour le contenu adulte, la Team Pending ne
+compte que postimg.cc et zupimages.net : les captures sont extraites dans un
+dossier, déposées sur postimg.cc par l'utilisateur, puis leurs liens directs collés.
 """
 
+import os
 import shutil
 import subprocess
 import sys
@@ -18,6 +20,7 @@ import requests
 from . import USER_AGENT
 
 HOSTS = {"pixhost": "pixhost.to", "catbox": "catbox.moe"}
+POSTIMG_URL = "https://postimages.org/"     # XXX : envoi à la main (pas d'API ouverte), liens directs collés ensuite
 
 
 class ScreenError(Exception):
@@ -114,3 +117,29 @@ def bbcode(shots: list) -> str:
     if not cells:
         return ""
     return "\n[b]CAPTURES[/b]\n[center]" + " ".join(cells) + "[/center]\n"
+
+
+def direct_links(text: str, hosts: set) -> list:
+    """Liens directs d'images collés (liste postimg, BBCode, HTML…) sur les hébergeurs demandés, sans doublon."""
+    import re
+    from urllib.parse import urlparse
+    out = []
+    for url in re.findall(r"https?://[^\s\[\]<>\"']+", text or ""):
+        url = url.rstrip(").,;")
+        if (urlparse(url).hostname or "").lower() not in hosts:
+            continue
+        if not re.search(r"\.(png|jpe?g|webp|gif)$", url, re.I):
+            continue                      # page de l'image (postimg.cc/xxxx) : pas un lien direct
+        if url not in out:
+            out.append(url)
+    return out
+
+
+def open_folder(path: Path):
+    try:
+        if sys.platform == "win32":
+            os.startfile(str(path))          # noqa: S606 (dossier local de l'utilisateur)
+        else:
+            subprocess.Popen(["xdg-open" if sys.platform != "darwin" else "open", str(path)])
+    except OSError:
+        pass

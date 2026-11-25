@@ -131,3 +131,32 @@ def create_torrent(
     if progress:
         progress(1.0)
     return hashlib.sha1(bencode(info)).hexdigest()
+
+
+def bdecode(data: bytes):
+    """Décodage bencode minimal (lecture d'un .torrent existant)."""
+    def at(i):
+        c = data[i:i + 1]
+        if c == b"i":
+            j = data.index(b"e", i)
+            return int(data[i + 1:j]), j + 1
+        if c in (b"l", b"d"):
+            i += 1
+            items = []
+            while data[i:i + 1] != b"e":
+                v, i = at(i)
+                items.append(v)
+            if c == b"l":
+                return items, i + 1
+            return {items[k]: items[k + 1] for k in range(0, len(items), 2)}, i + 1
+        j = data.index(b":", i)
+        n = int(data[i:j])
+        return data[j + 1:j + 1 + n], j + 1 + n
+    return at(0)[0]
+
+
+def torrent_info(path: Path) -> tuple:
+    """(nom des données, info-hash) d'un .torrent."""
+    meta = bdecode(Path(path).read_bytes())
+    info = meta[b"info"]
+    return info[b"name"].decode("utf-8", "replace"), hashlib.sha1(bencode(info)).hexdigest()

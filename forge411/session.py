@@ -49,6 +49,8 @@ class Session:
     catalog_for: str = ""
     slot_justification: str = ""
     result: Optional[Result] = None
+    # Correction après un retour de la Team Pending : {"infohash", "url", "points": [Point], "message"}
+    correction: Optional[dict] = None
 
     def ctx(self) -> Ctx:
         return Ctx(src=self.src, analysis=self.analysis, ident=self.ident, sub_id=self.sub_id,
@@ -65,6 +67,8 @@ class Session:
 
     @property
     def torrent_ready(self) -> bool:
+        if getattr(self, "correction", None):          # correction : le torrent publié reste le même (seed en cours)
+            return bool(self.torrent and self.torrent.exists())
         return bool(self.torrent and self.torrent.exists() and self.torrent_for == self.torrent_key)
 
     def reset_from_profile(self):
@@ -95,6 +99,19 @@ def save(session: "Session", path: Path) -> bool:
         tmp.replace(path)
         return True
     except Exception:            # objet non sérialisable, disque plein… : la sauvegarde est facultative
+        return False
+
+
+def snapshot(session: "Session", path: Path) -> bool:
+    """Copie de l'upload envoyé (même publié), pour une correction ultérieure."""
+    import pickle
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_bytes(pickle.dumps(session, protocol=pickle.HIGHEST_PROTOCOL))
+        tmp.replace(path)
+        return True
+    except Exception:
         return False
 
 

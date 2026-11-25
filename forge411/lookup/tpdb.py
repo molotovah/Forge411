@@ -26,17 +26,21 @@ def uuid_of(item: dict) -> str:
 
 
 def _image(item: dict) -> str:
+    """Image de la fiche ; de préférence sur cdn.theporndb.net, seul domaine ThePornDB affiché par C411
+    (thumb.theporndb.net est remplacé par un simple lien)."""
+    found = []
     for k in ("poster", "image", "back_image"):
         v = item.get(k)
         if isinstance(v, str) and v.startswith("http"):
-            return v
+            found.append(v)
     for k in ("posters", "background"):
         v = item.get(k) or {}
         if isinstance(v, dict):
             for size in ("large", "full", "medium"):
                 if str(v.get(size) or "").startswith("http"):
-                    return v[size]
-    return ""
+                    found.append(v[size])
+    from ..rules import allowed
+    return next((u for u in found if allowed(u)), found[0] if found else "")
 
 
 def _names(items) -> list:

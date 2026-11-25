@@ -133,6 +133,11 @@ class Profile:
                 p.block(d.label, ctx.d(d.key))
         return p.files(ctx.src).render()
 
+    def shot_rule(self, ctx: Ctx):
+        """Captures d'écran exigées dans la présentation (rules.ShotRule)."""
+        from ..rules import ShotRule
+        return ShotRule()
+
     # ── Options C411 ──────────────────────────────────────────────────────
     def auto_options(self, types: list, ctx: Ctx) -> dict:
         return {}

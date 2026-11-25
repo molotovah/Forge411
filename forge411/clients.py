@@ -59,6 +59,10 @@ class _Base:
     def status(self, infohash: str) -> Optional[Status]:
         raise NotImplementedError
 
+    def default_dir(self) -> str:
+        """Dossier de téléchargement par défaut du client (aide à la correspondance des chemins)."""
+        return ""
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -111,6 +115,12 @@ class QBittorrent(_Base):
         if "fail" in r.text.lower():
             raise ClientError("qBittorrent a refusé le torrent (déjà présent ?).")
 
+    def default_dir(self):
+        try:
+            return self._api("GET", "/api/v2/app/defaultSavePath").text.strip()
+        except ClientError:
+            return ""
+
     def status(self, infohash):
         items = self._api("GET", "/api/v2/torrents/info", params={"hashes": infohash.lower()}).json()
         if not items:
@@ -156,6 +166,12 @@ class Transmission(_Base):
     def test(self) -> str:
         v = self._rpc("session-get", {"fields": ["version"]}).get("version", "")
         return f"Transmission {v} connecté".strip()
+
+    def default_dir(self):
+        try:
+            return self._rpc("session-get", {"fields": ["download-dir"]}).get("download-dir", "")
+        except ClientError:
+            return ""
 
     def add(self, torrent, save_path, infohash):
         args = {"metainfo": base64.b64encode(torrent.read_bytes()).decode(), "download-dir": str(save_path),
@@ -212,6 +228,13 @@ class Deluge(_Base):
     def test(self) -> str:
         self._connect()
         return "Deluge connecté"
+
+    def default_dir(self):
+        try:
+            self._connect()
+            return self._call("core.get_config_value", "download_location") or ""
+        except ClientError:
+            return ""
 
     def add(self, torrent, save_path, infohash):
         self._connect()
@@ -299,3 +322,83 @@ def wait_seeding(client, infohash: str, on_status: Callable[[Status], None], can
             time.sleep(interval)
         if time.monotonic() - start > timeout:
             raise ClientError("Délai dépassé en attendant le seed.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Aide à la configuration
+# ═══════════════════════════════════════════════════════════════════════════
+
+ENABLE_HELP = {
+    "qbittorrent": "qBittorrent : Outils › Options › Interface web › cocher « Interface utilisateur Web » "
+                   "(port 8080 par défaut), puis renseigner un identifiant et un mot de passe.",
+    "transmission": "Transmission : Édition › Préférences › Distant › « Autoriser l'accès distant » (port 9091).",
+    "deluge": "Deluge : lancer deluge-web (port 8112) ; seul le mot de passe de l'interface web est demandé.",
+}
+
+
+def is_local(url: str) -> bool:
+    from urllib.parse import urlparse
+    h = (urlparse(url or "").hostname or "").lower()
+    return h in ("", "localhost", "127.0.0.1", "::1")
+
+
+def unc_host(path: str) -> str:
+    """Machine d'un chemin réseau Windows (\\\\NAS\\partage\\…), sinon chaîne vide."""
+    p = (path or "").replace("/", "\\")
+    return p[2:].split("\\", 1)[0] if p.startswith("\\\\") else ""
+
+
+def probe(url: str, timeout: float = 0.8) -> str:
+    """Type de client qui répond à cette adresse (« qbittorrent », « transmission », « deluge »), sinon ""."""
+    url = url.rstrip("/")
+    s = requests.Session()
+    s.headers["User-Agent"] = USER_AGENT
+    try:
+        r = s.get(url + "/api/v2/app/version", timeout=timeout)
+        # qBittorrent : « v4.6.2 » (accès sans mot de passe) ou 403 « Forbidden » (connexion requise)
+        if (r.status_code == 200 and r.text.strip().startswith("v")) or \
+                (r.status_code == 403 and r.text.strip() == "Forbidden"):
+            return "qbittorrent"
+    except requests.RequestException:
+        return ""
+    try:
+        r = s.post(url + "/transmission/rpc", timeout=timeout)
+        if r.status_code in (401, 409) and ("X-Transmission-Session-Id" in r.headers or "Transmission" in r.text):
+            return "transmission"
+        r = s.post(url + "/json", json={"method": "auth.check_session", "params": [], "id": 1}, timeout=timeout)
+        if r.status_code == 200 and "result" in r.text:
+            return "deluge"
+    except requests.RequestException:
+        pass
+    return ""
+
+
+def detect(hosts: list) -> list:
+    """Clients joignables sur ces machines, ports par défaut : [(type, adresse)]."""
+    from concurrent.futures import ThreadPoolExecutor
+    ports = {"qbittorrent": (8080, 8090), "transmission": (9091,), "deluge": (8112,)}
+    urls = list(dict.fromkeys(f"http://{h}:{p}" for h in hosts if h for ps in ports.values() for p in ps))
+    with ThreadPoolExecutor(8) as ex:
+        kinds = list(ex.map(probe, urls))
+    return [(k, u) for k, u in zip(kinds, urls) if k]
+
+
+def suggest_mapping(seed_dir: str, client_dir: str) -> tuple:
+    """Correspondance proposée pour un client distant : (dossier vu par Windows, même dossier vu par le client).
+
+    Partage réseau \\\\NAS\\Torrents\\… et client sur /downloads/… : le partage correspond au premier
+    dossier du client (/downloads). Rien si le dossier de seed n'est pas un partage réseau."""
+    p = (seed_dir or "").replace("/", "\\")
+    if not unc_host(p) or not client_dir:
+        return "", ""
+    parts = p[2:].split("\\")
+    if len(parts) < 2:
+        return "", ""
+    local = "\\\\" + "\\".join(parts[:2])
+    cd = client_dir.replace("\\", "/")
+    if cd.startswith("/"):
+        first = cd.strip("/").split("/")[0]
+        remote = "/" + first if first else "/"
+    else:
+        remote = cd.rstrip("\\/")
+    return local, remote

@@ -286,7 +286,18 @@ class SourceStep(Step):
             self._stop_loading()
             self.app.invalidate_torrent()
             self.render()
-        run_bg(lambda: fs.move(src, dest, lambda f: UI.call(self.loading_bar.configure, {"value": f * 100})),
+        import time
+        total, t0 = src.total_size, time.monotonic()
+
+        def progress(f):
+            el = max(time.monotonic() - t0, 0.001)
+            speed = total * f / el
+            eta = (total * (1 - f) / speed) if speed > 0 else 0
+            UI.call(self.loading_bar.configure, {"value": f * 100})
+            UI.call(self.loading_lbl.configure, {"text": f"Déplacement… {fmt_size(int(total * f))} / {fmt_size(total)}"
+                                                         f" · {fmt_size(int(speed))}/s · reste {int(eta // 60)} min "
+                                                         f"{int(eta % 60):02d} s"})
+        run_bg(lambda: fs.move(src, dest, progress),
                ok, lambda e: (self._stop_loading(), messagebox.showerror("Déplacement impossible", str(e), parent=self)))
 
     def ready(self):
@@ -730,6 +741,9 @@ class NameStep(Step):
 
     def _render_disk(self):
         s = self.s
+        if getattr(s, "correction", None):         # correction : les fichiers seedés ne bougent pas
+            self.disk_card.pack_forget()
+            return
         fixes = s.profile.tag_fixes(s.ctx()) if s.name_ok else []
         target = s.profile.rename_target(s.ctx())
         src = s.src
@@ -763,7 +777,7 @@ class NameStep(Step):
         s = self.s
         for k, v in self.dvars.items():
             s.details[k] = v.get()
-        if not self.do_rename.get():
+        if not self.do_rename.get() or getattr(s, "correction", None):
             done(True)
             return
         fixes = s.profile.tag_fixes(s.ctx())
@@ -917,10 +931,14 @@ class PresentStep(Step):
                        "[spoiler=titre]…[/spoiler]. Modifiable librement.").pack(side="left", padx=(8, 0))
         Btn(bar, "Régénérer", self.regen_desc, small=True).pack(side="right")
         self.shots_btn = Btn(bar, "Ajouter des captures", self.add_screens, small=True)
-        Tooltip(self.shots_btn, "Extrait des images de la vidéo avec ffmpeg, les envoie sur l'hébergeur choisi dans "
-                                "les Paramètres (pixhost ou catbox, acceptés par C411) et les ajoute à la description.")
+        Tooltip(self.shots_btn, "Vidéo : extrait des images avec ffmpeg. Sinon : choisis des images sur le disque. "
+                                "Elles sont envoyées sur un hébergeur accepté par C411 (XXX : postimg.cc, en "
+                                "glisser-déposer) puis ajoutées à la description.")
+        self.shots_btn.pack(side="right", padx=(0, 8))
         self.shots_lbl = label(bar, "", fg=T.MUTED, font=T.F_SMALL)
         self.shots_lbl.pack(side="right", padx=(0, 8))
+        self.desc_issues = IssueList(right)
+        self.desc_issues.pack(fill="x", pady=(0, 8))
         self.desc = TextArea(right, height=30, mono=False)
         self.desc.pack(fill="both", expand=True)
         self.desc.text.bind("<<Modified>>", self._desc_modified)
@@ -931,6 +949,7 @@ class PresentStep(Step):
             self.s.description = self.desc.get()
             self.s.desc_edited = True
             self.desc.text.edit_modified(False)
+            self.render_desc_checks()
             self.app.refresh_nav()
 
     def regen_desc(self):
@@ -938,7 +957,22 @@ class PresentStep(Step):
         s.description = s.profile.description(s.ctx())
         s.desc_for, s.desc_edited = s.name + "|" + repr(sorted(s.details.items())), False
         self.desc.set(s.description)
+        self.render_desc_checks()
         self.app.refresh_nav()
+
+    def desc_check(self):
+        """Images affichables et captures exigées par la catégorie (rules.py)."""
+        from .. import rules
+        s = self.s
+        return rules.check_description(s.description, s.profile.shot_rule(s.ctx()), s.ident.image if s.ident else "")
+
+    def render_desc_checks(self):
+        c = self.desc_check()
+        rule = self.s.profile.shot_rule(self.s.ctx())
+        items = c.items()
+        if not items and rule.minimum:
+            items = [("ok", f"Captures d'écran : {rule.minimum} minimum, atteint.")]
+        self.desc_issues.show(items, wrap=520)
 
     def on_enter(self):
         s = self.s
@@ -953,11 +987,7 @@ class PresentStep(Step):
         self.sub_combo.configure(values=list(prof.subcategories.values()))
         self.sub.set(prof.subcategories.get(s.sub_id, ""))
         self._load_options()
-        video = self._main_video()
-        if video is not None:
-            self.shots_btn.pack(side="right", padx=(0, 8), before=self.shots_lbl)
-        else:
-            self.shots_btn.pack_forget()
+        self.render_desc_checks()
 
     def _main_video(self):
         """MediaFile de la vidéo principale (profil vidéo ou XXX vidéo), sinon None."""
@@ -968,59 +998,117 @@ class PresentStep(Step):
     def add_screens(self):
         from .. import screens as SC
         s, cfg = self.s, self.app.cfg
+        rule = s.profile.shot_rule(s.ctx())
+        adult = s.profile.key == "xxx"
+        count = max(int(cfg.get("screens_count") or 4), rule.minimum)
         mf = self._main_video()
-        ffmpeg = SC.find_ffmpeg(cfg.get("ffmpeg_path"))
-        if mf is None:
-            return
-        if not ffmpeg:
-            from .. import ffmpeg_setup as FS
-            if not FS.supported():
-                messagebox.showwarning("Captures", "ffmpeg est introuvable : installe-le avec le gestionnaire de "
-                                                   "paquets de ton système ou indique son chemin dans les Paramètres.",
-                                       parent=self)
-                return
-            if not messagebox.askyesno("Captures", "Les captures demandent ffmpeg, absent de ce PC.\n\n"
-                                                   "L'installer maintenant (environ 75 Mo, version officielle vérifiée) ?",
-                                       parent=self):
-                return
-            from .ffmpeg_view import FfmpegDialog
-            ffmpeg = FfmpegDialog.ask(self)
+        out = cfg.nfo_dir.parent / "captures" / fs_safe(s.name)
+        if mf is not None:
+            ffmpeg = self._ffmpeg()
             if not ffmpeg:
                 return
-        adult = s.profile.key == "xxx"
-        host = "pixhost" if adult else (cfg.get("screens_host") or "pixhost")
-        count = int(cfg.get("screens_count") or 4)
-        if not messagebox.askyesno("Captures", f"Extraire {count} captures de {mf.path.name} et les envoyer sur "
-                                               f"{SC.HOSTS[host]} ?\n\nLes images seront publiques chez l'hébergeur"
-                                               + (" (marquées contenu adulte)." if adult else "."), parent=self):
+            files = None
+        else:
+            picked = filedialog.askopenfilenames(parent=self, title=f"Captures ({count} conseillées)",
+                                                 filetypes=[("Images", "*.png *.jpg *.jpeg *.webp *.gif"),
+                                                            ("Tous", "*.*")])
+            if not picked:
+                return
+            files = [Path(f) for f in picked]
+        if adult:                         # Team Pending XXX : postimg.cc ou zupimages.net uniquement
+            self._screens_manual(mf, files, out, count)
             return
-        out = cfg.nfo_dir.parent / "captures" / fs_safe(s.name)
+        host = cfg.get("screens_host") or "pixhost"
+        what = f"Extraire {count} captures de {mf.path.name}" if mf is not None else f"Envoyer {len(files)} image(s)"
+        if not messagebox.askyesno("Captures", f"{what} et les envoyer sur {SC.HOSTS[host]} ?\n\n"
+                                               "Les images seront publiques chez l'hébergeur.", parent=self):
+            return
         self.shots_btn.set_enabled(False)
         self.app.busy(True)
 
         def work():
-            shots = SC.extract(ffmpeg, mf.path, mf.duration_ms, out, count,
-                               lambda i, n: UI.call(self.shots_lbl.configure, {"text": f"Capture {i}/{n}…"}))
+            shots = self._extract(SC, mf, out, count) if mf is not None else [SC.Shot(f) for f in files]
             for i, sh in enumerate(shots, 1):
                 UI.call(self.shots_lbl.configure, {"text": f"Envoi {i}/{len(shots)}…"})
-                SC.upload(sh, host, adult)
+                SC.upload(sh, host, False)
             return SC.bbcode(shots)
-
-        def ok(block):
-            self.app.busy(False)
-            self.shots_btn.set_enabled(True)
-            self.shots_lbl.configure(text="✓ Captures ajoutées", fg=T.SUCCESS)
-            text = self.desc.get().rstrip() + "\n" + block
-            self.desc.set(text)
-            s.description, s.desc_edited = text, True
-            self.app.refresh_nav()
 
         def err(e):
             self.app.busy(False)
             self.shots_btn.set_enabled(True)
             self.shots_lbl.configure(text="", fg=T.MUTED)
             messagebox.showerror("Captures", str(e), parent=self)
-        run_bg(work, ok, err)
+        run_bg(work, self._append_shots, err)
+
+    def _ffmpeg(self):
+        from .. import screens as SC
+        ffmpeg = SC.find_ffmpeg(self.app.cfg.get("ffmpeg_path"))
+        if ffmpeg:
+            return ffmpeg
+        from .. import ffmpeg_setup as FS
+        if not FS.supported():
+            messagebox.showwarning("Captures", "ffmpeg est introuvable : installe-le avec le gestionnaire de "
+                                               "paquets de ton système ou indique son chemin dans les Paramètres.",
+                                   parent=self)
+            return ""
+        if not messagebox.askyesno("Captures", "Les captures demandent ffmpeg, absent de ce PC.\n\n"
+                                               "L'installer maintenant (environ 75 Mo, version officielle vérifiée) ?",
+                                   parent=self):
+            return ""
+        from .ffmpeg_view import FfmpegDialog
+        return FfmpegDialog.ask(self) or ""
+
+    def _extract(self, SC, mf, out, count):
+        return SC.extract(self._ffmpeg_path, mf.path, mf.duration_ms, out, count,
+                          lambda i, n: UI.call(self.shots_lbl.configure, {"text": f"Capture {i}/{n}…"}))
+
+    @property
+    def _ffmpeg_path(self):
+        from .. import screens as SC
+        return SC.find_ffmpeg(self.app.cfg.get("ffmpeg_path"))
+
+    def _append_shots(self, block):
+        s = self.s
+        self.app.busy(False)
+        self.shots_btn.set_enabled(True)
+        if not block:
+            self.shots_lbl.configure(text="", fg=T.MUTED)
+            return
+        self.shots_lbl.configure(text="✓ Captures ajoutées", fg=T.SUCCESS)
+        text = self.desc.get().rstrip() + "\n" + block
+        self.desc.set(text)
+        s.description, s.desc_edited = text, True
+        self.render_desc_checks()
+        self.app.refresh_nav()
+
+    def _screens_manual(self, mf, files, out, count):
+        """XXX : captures déposées à la main sur postimg.cc (pas d'envoi automatique), liens collés ensuite."""
+        from .. import screens as SC
+        from .dialogs import ShotLinksDialog
+
+        def ready(paths):
+            self.app.busy(False)
+            self.shots_btn.set_enabled(True)
+            self.shots_lbl.configure(text="", fg=T.MUTED)
+            folder = paths[0].parent if paths else out
+            SC.open_folder(folder)
+            webbrowser.open(SC.POSTIMG_URL)
+            urls = ShotLinksDialog.ask(self, folder, len(paths), count)
+            if urls:
+                self._append_shots(SC.bbcode([SC.Shot(Path(""), url=u, thumb=u, page=u) for u in urls]))
+
+        if mf is None:
+            ready(files)
+            return
+        self.shots_btn.set_enabled(False)
+        self.app.busy(True)
+
+        def err(e):
+            self.app.busy(False)
+            self.shots_btn.set_enabled(True)
+            self.shots_lbl.configure(text="", fg=T.MUTED)
+            messagebox.showerror("Captures", str(e), parent=self)
+        run_bg(lambda: [sh.path for sh in self._extract(SC, mf, out, count)], ready, err)
 
     def _sub_changed(self):
         s = self.s
@@ -1102,6 +1190,8 @@ class PresentStep(Step):
         s = self.s
         if not s.description.strip() or not s.sub_id or s.options_for != s.sub_id:
             return False
+        if self.desc_check().errors:
+            return False
         return all(s.options.get(t.id) for t in self.types if t.required)
 
     def leave(self, done):
@@ -1144,6 +1234,11 @@ class PublishStep(Step):
         row.pack(fill="x", pady=(10, 0))
         self.seed_btn = Btn(row, "Ajouter au client torrent", self.add_to_client, small=True)
         self.seed_btn.pack(side="left")
+        self.seed_confirm = tk.BooleanVar(value=False)
+        self.seed_check = ttk.Checkbutton(seed, text="Mon client torrent seed ce torrent (statut « En partage » / "
+                                                     "Seeding, données vérifiées à 100 %)",
+                                          variable=self.seed_confirm, command=self.render_checks,
+                                          style="Card.TCheckbutton")
         self._seed_cancel = None
         self.cat_box = self.section(self.root, "Déjà sur C411", "Doublons et slots, d'après le catalogue du site.",
                                     help="Recherche des releases existantes (API Torznab). L'attribution d'un slot "
@@ -1160,6 +1255,26 @@ class PublishStep(Step):
         self.just.text.bind("<KeyRelease>", lambda e: self._just_changed())
         self.just_count = label(self.just_box, "", fg=T.FAINT, font=T.F_SMALL)
         self.just_count.pack(anchor="e")
+        self.fix_box = self.section(self.root, "Correction pour la Team Pending",
+                                    "Le torrent et le seed restent les mêmes : seuls le titre, la description et le "
+                                    "NFO changent sur la page du torrent.",
+                                    help="L'API C411 ne permet pas de modifier un torrent : copie chaque élément, "
+                                         "colle-le dans « Modifier » sur la page du torrent, enregistre, puis clique "
+                                         "« Soumettre pour re-examen ».")
+        self.fix_lbl = autowrap(label(self.fix_box, ""))
+        self.fix_lbl.pack(fill="x")
+        row = tk.Frame(self.fix_box, bg=T.SURFACE)
+        row.pack(fill="x", pady=(10, 0))
+        for text, cmd in (("Copier le titre", lambda: self._copy(self.s.name, "Titre")),
+                          ("Copier la description", lambda: self._copy(self.s.description, "Description")),
+                          ("Copier le NFO", lambda: self._copy(self.s.nfo, "NFO")),
+                          ("Ouvrir la page du torrent", self._open_torrent_page)):
+            Btn(row, text, cmd, small=True).pack(side="left", padx=(0, 8))
+        self.fix_msg = label(self.fix_box, "", fg=T.MUTED, font=T.F_SMALL)
+        self.fix_msg.pack(fill="x", pady=(8, 0))
+        Btn(self.fix_box, "J'ai soumis la correction", self._correction_done, kind="primary", small=True).pack(
+            anchor="w", pady=(10, 0))
+        self.fix_box.master.master.pack_forget()
         self.checks_box = self.section(self.root, "Vérifications")
         self.checks = IssueList(self.checks_box)
         self.checks.pack(fill="x")
@@ -1175,7 +1290,60 @@ class PublishStep(Step):
         Tooltip(self.publish_btn, "Publie directement. Ton client torrent doit déjà seeder le torrent.")
         self.render_checks()
 
+    def _copy(self, text, what):
+        self.clipboard_clear()
+        self.clipboard_append(text or "")
+        self.fix_msg.configure(text=f"✓ {what} copié(e) dans le presse-papiers.", fg=T.SUCCESS)
+
+    def _open_torrent_page(self):
+        from .. import correction as FIX
+        url = (self.s.correction or {}).get("url") or FIX.torrent_page(self.s.infohash)
+        if url:
+            webbrowser.open(url)
+
+    def _correction_done(self):
+        from .. import session as SESS
+        from ..config import UPLOADS_DIR
+        s = self.s
+        add_history({"name": s.name, "type": s.profile.label, "action": "Correction",
+                     "url": (s.correction or {}).get("url", ""), "torrent": str(s.torrent), "infohash": s.infohash,
+                     "snapshot": str(UPLOADS_DIR / f"{s.infohash}.pkl")})
+        fix, s.correction = s.correction, None
+        SESS.snapshot(s, UPLOADS_DIR / f"{s.infohash}.pkl")
+        s.correction = fix
+        self.fix_msg.configure(text="✓ Correction enregistrée dans l'historique. Surveille la discussion de "
+                                    "modération sur la page du torrent.", fg=T.SUCCESS)
+
+    def render_correction(self):
+        s = self.s
+        fix = getattr(s, "correction", None)
+        box = self.fix_box.master.master            # carte de la section
+        if not fix:
+            box.pack_forget()
+            if self.publish_btn is not None and self.publish_btn.winfo_exists():
+                self.publish_btn.pack(side="left")
+                self.draft_btn.pack(side="left", padx=(0, 8), before=self.publish_btn)
+            return
+        if not box.winfo_ismapped():
+            box.pack(fill="x", pady=(0, 14), before=self.checks_box.master.master)
+        self.fix_lbl.configure(text=f"Titre corrigé : {s.name}\nPage : {fix.get('url') or '?'}\n\n"
+                                    "1. Ouvre la page du torrent et clique « Modifier ».\n"
+                                    "2. Colle le titre, la description et, s'il a changé, le NFO.\n"
+                                    "3. Enregistre, vérifie que ton client seed toujours, puis « Soumettre pour re-examen ».")
+        if self.publish_btn is not None and self.publish_btn.winfo_exists():
+            self.publish_btn.pack_forget()
+            self.draft_btn.pack_forget()
+        self.tor_btn.pack_forget()
+        if s.torrent_ready:
+            self.tor_bar.configure(value=100)
+            self.tor_lbl.configure(text=f"✓  Torrent publié conservé : {s.torrent.name}\nInfo-hash : {s.infohash}",
+                                   fg=T.SUCCESS)
+        else:
+            self.tor_lbl.configure(text="Torrent d'origine introuvable sur ce PC : le seed ne peut pas être vérifié "
+                                        "ici. Vérifie-le dans ton client.", fg=T.WARNING)
+
     def on_enter(self):
+        self.render_correction()
         self.render_recap()
         self.render_checks()
         self.render_result()
@@ -1183,7 +1351,8 @@ class PublishStep(Step):
         self._just_changed()
         self.render_seed()
         self.load_catalog()
-        if not self.s.torrent_ready and self._cancel is None and self.s.result is None:
+        if not self.s.torrent_ready and self._cancel is None and self.s.result is None \
+                and not getattr(self.s, "correction", None):
             self.make_torrent()
 
     def render_recap(self):
@@ -1217,6 +1386,9 @@ class PublishStep(Step):
         if not (s.ident and s.ident.image) and "[img]" not in s.description.lower():
             items.append(("warning", "Aucune image dans la présentation : C411 en exige une "
                                      "(ajoute une URL d'image dans la fiche ou la description)."))
+        from .. import rules
+        dc = rules.check_description(s.description, s.profile.shot_rule(s.ctx()), s.ident.image if s.ident else "")
+        items += dc.items()
         items.append(("ok", "NFO enregistré") if s.nfo_path else ("error", "NFO manquant"))
         items.append(("ok", "Description prête") if s.description.strip() else ("error", "Description vide"))
         seed = fs.seed_location_issue(s.src, self.app.cfg.get("seed_dir"))
@@ -1228,7 +1400,11 @@ class PublishStep(Step):
             items.append(("error", "URL d'annonce manquante (Paramètres)."))
         items.append(("ok", "Torrent prêt") if s.torrent_ready else ("info", "Torrent pas encore créé"))
         if CL.make(self.app.cfg):
-            items.append(("ok", "En seed dans le client") if s.seeding else ("info", "Pas encore en seed dans le client"))
+            items.append(("ok", "En seed dans le client") if s.seeding else
+                         ("error", "Pas encore en seed dans le client : C411 refuse un torrent sans seed."))
+        else:
+            items.append(("ok", "Seed confirmé par toi") if self.seed_confirm.get() else
+                         ("error", "Confirme que ton client seed ce torrent (case de la section Seed)."))
         v = s.catalog
         if v is not None and v.exact:
             items.append(("error", "Une release du même nom existe déjà sur C411 (doublon)."))
@@ -1240,12 +1416,17 @@ class PublishStep(Step):
         if self.publish_btn is None or not self.publish_btn.winfo_exists():
             return
         can = s.torrent_ready and s.name_ok and bool(s.nfo_path) and s.result is None and self._cancel is None
-        self.publish_btn.set_enabled(can)
+        seeded = s.seeding if CL.make(self.app.cfg) else self.seed_confirm.get()
+        self.publish_btn.set_enabled(can and seeded and not dc.errors)
         self.draft_btn.set_enabled(can)
 
     # ── Torrent ───────────────────────────────────────────────────────────
     def make_torrent(self):
         s = self.s
+        if getattr(s, "correction", None):
+            self.tor_lbl.configure(text="Correction : le torrent publié ne change pas (un nouveau torrent aurait un "
+                                        "autre info-hash et ne serait pas celui que C411 attend).", fg=T.MUTED)
+            return
         announce = self.app.cfg.get("tracker_url")
         if not announce:
             self.tor_lbl.configure(text="Renseigne ton URL d'annonce (passkey) dans les Paramètres.", fg=T.ERROR)
@@ -1267,6 +1448,7 @@ class PublishStep(Step):
             self.tor_bar.configure(value=100)
             self.tor_lbl.configure(text=f"✓  {out.name}\nDossier : {out.parent}\nInfo-hash : {infohash}", fg=T.SUCCESS)
             s.seed, s.seeding = "", False
+            self.seed_confirm.set(False)
             self.render_checks()
             self.render_seed()
             if CL.make(self.app.cfg) and self.app.cfg.get("client_auto"):
@@ -1316,13 +1498,11 @@ class PublishStep(Step):
             messagebox.showwarning("Justification hors slot", "La justification doit faire au moins 30 caractères.",
                                    parent=self)
             return
-        if CL.make(self.app.cfg) and not s.seeding and not messagebox.askyesno(
-                "Publier", "Le torrent n'est pas encore en seed dans ton client : C411 risque de le refuser.\n\n"
-                           "Publier quand même ?", parent=self):
+        if CL.make(self.app.cfg) and not s.seeding:
+            messagebox.showwarning("Publier", "Le torrent n'est pas en seed dans ton client : C411 le refuserait.\n\n"
+                                              "Ajoute-le au client (section Seed) et attends « En seed ».", parent=self)
             return
-        if not messagebox.askyesno(
-                "Publier", f"Publier maintenant sur C411 ?\n\n{self.s.name}\n\n"
-                "Ton client torrent doit déjà seeder ce torrent, sinon C411 le refusera.", parent=self):
+        if not messagebox.askyesno("Publier", f"Publier maintenant sur C411 ?\n\n{self.s.name}", parent=self):
             return
         self._send("Publication", lambda api: api.upload(**self._payload()))
 
@@ -1339,9 +1519,13 @@ class PublishStep(Step):
         def ok(res):
             self.app.busy(False)
             if res.ok:
+                from .. import session as SESS
+                from ..config import UPLOADS_DIR
+                snap = UPLOADS_DIR / f"{self.s.infohash}.pkl"
+                SESS.snapshot(self.s, snap)
                 self.s.result = res
                 add_history({"name": self.s.name, "type": self.s.profile.label, "action": what, "url": res.url,
-                             "torrent": str(self.s.torrent), "infohash": self.s.infohash})
+                             "torrent": str(self.s.torrent), "infohash": self.s.infohash, "snapshot": str(snap)})
             self.render_result(res)
             self.render_checks()
 
@@ -1357,11 +1541,15 @@ class PublishStep(Step):
         client = CL.make(self.app.cfg)
         if not client:
             self.seed_lbl.configure(text="Aucun client configuré : ajoute toi-même le torrent à ton client, avec le "
-                                         "dossier de la source comme emplacement (ou configure-le dans les Paramètres).",
+                                         "dossier de la source comme emplacement (ou configure-le dans les Paramètres), "
+                                         "puis coche la case une fois le seed démarré.",
                                     fg=T.MUTED)
             self.seed_btn.pack_forget()
             self.seed_bar.pack_forget()
+            if not self.seed_check.winfo_ismapped():
+                self.seed_check.pack(fill="x", pady=(10, 0))
             return
+        self.seed_check.pack_forget()
         if not self.seed_btn.winfo_ismapped():
             self.seed_btn.pack(side="left")
         self.seed_btn.set_enabled(s.torrent_ready and self._seed_cancel is None and not s.seeding)

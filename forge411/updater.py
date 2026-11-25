@@ -2,8 +2,9 @@
 Mises à jour : dernière release GitHub, téléchargement vérifié et remplacement de l'exécutable.
 
 Sous Windows (exécutable compilé), la nouvelle version est téléchargée à côté de
-Forge411.exe, contrôlée (taille + SHA-256 publié par GitHub), puis un petit
-script attend la fermeture de l'application, échange les fichiers et relance.
+Forge411.exe et contrôlée (taille + SHA-256 publié par GitHub). Elle est ensuite
+lancée : elle attend la fermeture de l'ancienne, se copie à sa place et relance
+Forge411.exe, qui supprime le fichier téléchargé. Aucun script intermédiaire.
 Depuis les sources, l'application indique seulement la nouvelle version.
 """
 
@@ -12,7 +13,7 @@ import os
 import re
 import subprocess
 import sys
-import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
@@ -112,8 +113,6 @@ def self_update_blocker(rel: Release) -> str:
         return "Lancé depuis les sources : mets à jour avec git pull ou télécharge la release."
     if not rel.asset_url:
         return f"La release {rel.tag} ne contient pas {ASSET_NAME}."
-    if re.search(r'[%"^!]', str(exe)):
-        return "Le chemin de Forge411.exe contient un caractère spécial : installe la mise à jour à la main."
     if not os.access(exe.parent, os.W_OK):
         return f"Pas de droit d'écriture dans {exe.parent} : installe la mise à jour à la main."
     return ""
@@ -152,44 +151,70 @@ def download(rel: Release, dest: Path, progress: Callable[[int, int], None] = No
         if f.read(2) != b"MZ":
             tmp.unlink(missing_ok=True)
             raise UpdateError("Le fichier téléchargé n'est pas un exécutable Windows.")
-    os.replace(tmp, dest)
+    _retry(lambda: os.replace(tmp, dest), "l'antivirus garde le fichier téléchargé")
     return dest
 
 
-def swap_script(exe: Path, new: Path, pids: list) -> str:
-    """Script batch : attend la fin des processus, remplace l'exécutable, relance."""
-    old = exe.with_name(exe.name + ".old")
-    waits = "\n".join(
-        f':wait{p}\ntasklist /FI "PID eq {p}" /NH 2>NUL | find " {p} " >NUL || goto done{p}\n'
-        f'set /a n+=1\nif %n% GEQ 120 goto done{p}\nping -n 2 127.0.0.1 >NUL\ngoto wait{p}\n:done{p}'
-        for p in pids)
-    return f"""@echo off
-setlocal
-set n=0
-{waits}
-set n=0
-:swap
-del /F /Q "{old}" >NUL 2>&1
-move /Y "{exe}" "{old}" >NUL 2>&1 && goto place
-set /a n+=1
-if %n% GEQ 30 goto fail
-ping -n 2 127.0.0.1 >NUL
-goto swap
-:place
-move /Y "{new}" "{exe}" >NUL 2>&1 || (move /Y "{old}" "{exe}" >NUL 2>&1 & goto fail)
-start "" "{exe}"
-ping -n 4 127.0.0.1 >NUL
-del /F /Q "{old}" >NUL 2>&1
-goto end
-:fail
-start "" "{exe}"
-:end
-(goto) 2>NUL & del "%~f0"
-"""
+def _retry(fn, what: str, tries: int = 180, delay: float = 0.5):
+    """Microsoft Defender peut retenir un nouvel exécutable le temps d'une analyse (jusqu'à ~1 min)."""
+    for i in range(tries):
+        try:
+            return fn()
+        except PermissionError as e:
+            last = e
+            time.sleep(delay)
+    raise UpdateError(f"Mise à jour bloquée : {what} ({last}). Réessaie dans un instant.")
+
+
+def wait_scanned(path: Path, progress: Callable[[str], None] = None):
+    """Attend que le fichier soit lisible en exclusivité (fin de l'analyse antivirus)."""
+    if progress:
+        progress("Vérification par l'antivirus Windows…")
+
+    def probe():
+        with open(path, "r+b"):
+            pass
+    _retry(probe, "l'antivirus analyse encore la nouvelle version")
+
+
+UPDATE_NAME = "Forge411.update.exe"          # nouvelle version téléchargée à côté de Forge411.exe
+
+
+def _wait_pids(pids: list, timeout: float = 90.0):
+    """Attend la fin des processus (Windows : WaitForSingleObject ; ailleurs : sondage)."""
+    deadline = time.monotonic() + timeout
+    if sys.platform == "win32":
+        import ctypes
+        k32 = ctypes.windll.kernel32
+        for pid in pids:
+            h = k32.OpenProcess(0x00100000, False, int(pid))          # SYNCHRONIZE
+            if not h:
+                continue                                              # déjà terminé
+            try:
+                k32.WaitForSingleObject(h, max(0, int((deadline - time.monotonic()) * 1000)))
+            finally:
+                k32.CloseHandle(h)
+        return
+    for pid in pids:
+        while time.monotonic() < deadline:
+            try:
+                os.kill(int(pid), 0)
+            except OSError:
+                break
+            time.sleep(0.3)
+
+
+def _launch(exe: Path, *args: str):
+    env = dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT="1")   # chaque instance extrait ses propres fichiers
+    flags = 0x00000008 | 0x00000200 if sys.platform == "win32" else 0   # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+    subprocess.Popen([str(exe), *args], env=env, close_fds=True, cwd=str(exe.parent), creationflags=flags)
 
 
 def install(new: Path):
-    """Lance l'échange des fichiers ; l'application doit se fermer juste après."""
+    """Lance la nouvelle version en mode « fin de mise à jour » ; l'application doit se fermer juste après.
+
+    Aucun script : la nouvelle version attend la fin de l'ancienne, se copie à sa place,
+    relance Forge411.exe puis est supprimée par celui-ci."""
     exe = current_exe()
     if not exe:
         raise UpdateError("Installation automatique réservée à l'exécutable Windows.")
@@ -197,10 +222,54 @@ def install(new: Path):
     pids = [os.getpid()]
     if Path(getattr(sys, "_MEIPASS", exe.parent)).resolve() != exe.parent:
         pids.append(os.getppid())
-    fd, script = tempfile.mkstemp(prefix="forge411-update-", suffix=".cmd")
-    with os.fdopen(fd, "w", encoding="mbcs", newline="\r\n") as f:
-        f.write(swap_script(exe, new, pids))
-    env = dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT="1")   # la nouvelle instance extrait ses propres fichiers
-    flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
-    subprocess.Popen(["cmd.exe", "/c", script], creationflags=flags, close_fds=True, env=env,
-                     cwd=str(exe.parent))
+    try:
+        _launch(new, "--finish-update", str(exe), *map(str, pids))
+    except OSError as e:
+        raise UpdateError(f"Lancement de la nouvelle version impossible : {e}") from e
+
+
+def finish_update(args: list) -> int:
+    """Exécuté par la nouvelle version : remplace Forge411.exe par elle-même puis le relance."""
+    import logging
+    import shutil
+    target, pids = Path(args[0]), args[1:]
+    _wait_pids(pids)
+    me = Path(sys.executable).resolve()
+    tmp = target.with_name(target.name + ".new")
+    for _ in range(60):                       # antivirus ou explorateur : le fichier peut rester pris un moment
+        try:
+            shutil.copyfile(me, tmp)
+            os.replace(tmp, target)
+            break
+        except OSError as e:
+            last = e
+            time.sleep(0.5)
+    else:
+        logging.error("Mise à jour : remplacement de %s impossible (%s)", target, last)
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        _launch(me)                           # la nouvelle version démarre quand même, depuis son propre fichier
+        return 1
+    _launch(target, "--cleanup-update", str(me))
+    return 0
+
+
+def cleanup_update(path: str):
+    """Supprime l'exécutable temporaire de la mise à jour (en tâche de fond, il peut être encore ouvert)."""
+    import threading
+
+    def work():
+        p = Path(path)
+        if p.name.lower() != UPDATE_NAME.lower():
+            return
+        for _ in range(60):
+            try:
+                p.unlink()
+                return
+            except FileNotFoundError:
+                return
+            except OSError:
+                time.sleep(0.5)
+    threading.Thread(target=work, daemon=True).start()

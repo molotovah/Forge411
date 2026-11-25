@@ -2,6 +2,24 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [SemVer](https://semver.org/lang/fr/).
 
+## [2.1.0] - 2026-11-25
+
+### Ajouté
+- **Corriger une validation** : après « Modification demandée », colle le message de la Team Pending. Forge411 rouvre l'upload (même .torrent, seed inchangé) et affiche chaque point sur l'étape concernée. Il prépare ensuite le titre, la description et le NFO à coller dans « Modifier », avant « Soumettre pour re-examen ». Un bouton **Corriger** est aussi présent dans l'Historique.
+- Contrôle des images de la présentation : hébergeurs de la liste blanche C411 et nombre minimal de captures hors bannière (XXX : 3, 4 pour un pack, sur postimg.cc ou zupimages.net ; jeux : 3 ; applications : 2). L'étape Présentation reste bloquée tant que le compte n'y est pas.
+- Captures XXX : extraction avec ffmpeg, puis dépôt sur postimg.cc et collage des liens directs (dialogue guidé).
+- Captures à partir d'images du disque pour les contenus sans vidéo (jeux, applications…).
+- Client torrent : bouton **Détecter**, aide d'activation de l'interface web, champs adaptés au client, option « client sur un autre appareil », bouton **Proposer** pour la correspondance des dossiers et aperçu du chemin transmis au client.
+
+### Modifié
+- Nommage XXX Films / VR conforme aux retours de la Team Pending : `[Studio][CATÉGORIE].Titre.Date.Acteur.Langue.Résolution.Source.Audio.Codec-TEAM`. La source suit la résolution, la date suit le titre, et la catégorie non hétéro passe en tête, entre crochets. Ces règles sont aussi vérifiées sur un nom saisi à la main.
+- Image ThePornDB prise sur cdn.theporndb.net : thumb.theporndb.net n'est pas affiché par C411.
+- Publication impossible sans seed : seed vérifié dans le client configuré, sinon case à cocher obligatoire.
+- Déplacement vers le dossier de seed : copie native Windows (CopyFileEx), nettement plus rapide vers un partage réseau, avec débit et temps restant.
+
+### Corrigé
+- Mise à jour intégrée : plus de script batch. La nouvelle version attend la fermeture de l'ancienne, se copie à sa place et redémarre. L'analyse de Microsoft Defender sur le fichier téléchargé est attendue, et rien ne se lance plus depuis le fil de l'interface (fenêtre figée, Forge411.exe disparu).
+
 ## [2.0.3] - 2026-11-25
 
 ### Corrigé

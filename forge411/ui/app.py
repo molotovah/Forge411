@@ -177,6 +177,9 @@ class App(tk.Tk):
             ("Suivre", (
                 ("drafts", "✎", "Brouillons C411", self.open_drafts, "Tes brouillons sur C411 (15 au maximum)."),
                 ("history", "◷", "Historique", self.open_history, "Ce que tu as envoyé depuis Forge411."),
+                ("fix", "⚑", "Corriger une validation", self.open_correction,
+                 "« Modification demandée » par la Team Pending : colle son message, Forge411 rouvre l'upload "
+                 "avec les points à corriger."),
                 ("profile", "◉", "Mon profil", self.open_profile,
                  "Niveau, classe, ratio, Zen et état de ton compte C411."))),
             ("Application", (
@@ -224,6 +227,14 @@ class App(tk.Tk):
         self.h_sub = label(head, "", fg=T.MUTED)
         self.h_sub.pack(fill="x", pady=(2, 0))
         self.h_sub.bind("<Configure>", lambda e: self.h_sub.configure(wraplength=max(e.width - 4, 200)))
+        # Bandeau du mode correction : points de la Team Pending pour l'étape affichée
+        self.fix_banner = tk.Frame(main, bg=T.SURFACE, highlightthickness=1, highlightbackground=T.WARNING)
+        self.fix_title = label(self.fix_banner, "", fg=T.WARNING, font=T.F_UI_B, bg=T.SURFACE)
+        self.fix_title.pack(fill="x", padx=14, pady=(10, 2))
+        self.fix_text = label(self.fix_banner, "", bg=T.SURFACE)
+        self.fix_text.pack(fill="x", padx=14, pady=(0, 10))
+        self.fix_text.bind("<Configure>", lambda e: self.fix_text.configure(wraplength=max(e.width - 4, 200)))
+        self._main = main
 
         foot = tk.Frame(main, bg=T.BG)
         foot.pack(side="bottom", fill="x", padx=32, pady=(10, 20))
@@ -240,9 +251,93 @@ class App(tk.Tk):
         self.body.pack(fill="both", expand=True, padx=(32, 18))
 
     # ── Navigation ────────────────────────────────────────────────────────
+    def render_fix_banner(self, i: int):
+        from .. import correction as FIX
+        fix = getattr(self.session, "correction", None)
+        if not fix:
+            self.fix_banner.pack_forget()
+            return
+        here = [p.text for p in fix.get("points", []) if p.step == i]
+        other = sorted({FIX.STEP_LABELS[p.step] for p in fix.get("points", []) if p.step != i})
+        self.fix_title.configure(text="⚑ Correction demandée par la Team Pending" + (
+            f" : {len(here)} point(s) pour cette étape" if here else ""))
+        lines = [f"• {t}" for t in here] or ["Rien de signalé pour cette étape."]
+        if other:
+            lines.append("Autres étapes concernées : " + ", ".join(other) + ".")
+        self.fix_text.configure(text="\n".join(lines))
+        if not self.fix_banner.winfo_ismapped():
+            self.fix_banner.pack(fill="x", padx=32, pady=(0, 12), before=self.body)
+
+    def open_correction(self, entry=None):
+        from .dialogs import CorrectionDialog
+        res = CorrectionDialog.ask(self, entry)
+        if res:
+            self.start_correction(*res)
+
+    def start_correction(self, entry, message):
+        """Recharge l'upload (copie locale, sinon la source à choisir) en mode correction."""
+        from pathlib import Path
+        from tkinter import filedialog
+        from .. import correction as FIX
+        from ..torrent import torrent_info
+        if self._busy:
+            return
+        if self.session.src and not self.session.result and not getattr(self.session, "correction", None) and \
+                not messagebox.askyesno("Correction", "Abandonner l'upload en cours ?", parent=self):
+            return
+        ih = entry.get("infohash", "")
+        fix = {"infohash": ih, "url": entry.get("url") or FIX.torrent_page(ih), "message": message,
+               "points": FIX.parse(message)}
+        torrent = Path(entry["torrent"]) if entry.get("torrent") else None
+        if torrent is None or not torrent.exists():
+            cand = self.cfg.torrents_dir / f"{entry.get('name', '')}.torrent"
+            torrent = cand if entry.get("name") and cand.exists() else None
+        snap = SESS.load(Path(entry["snapshot"])) if entry.get("snapshot") else None
+        self._stop_seed()
+        if snap is not None:
+            snap.result, snap.correction = None, fix
+            if torrent is not None:
+                snap.torrent = torrent
+            snap.seed, snap.seeding = "", False
+            self.load_session(snap)
+            steps = [p.step for p in fix["points"] if self.reachable(p.step)]
+            if steps:
+                self.show(min(steps))
+            return
+        # Pas de copie locale (upload antérieur à cette version) : on repart de la source seedée
+        guess = None
+        if torrent is not None:
+            name, t_hash = torrent_info(torrent)
+            if ih and t_hash != ih:
+                messagebox.showwarning("Correction", f"Le .torrent trouvé ({torrent.name}) n'a pas l'info-hash du "
+                                                     "torrent publié : il est ignoré.", parent=self)
+                torrent = None
+            else:
+                ih = ih or t_hash
+                seed = self.cfg.get("seed_dir")
+                if seed and (Path(seed) / name).exists():
+                    guess = Path(seed) / name
+        if guess is None:
+            messagebox.showinfo("Correction", "Choisis la source de cet upload (le fichier ou le dossier que ton "
+                                              "client seed).", parent=self)
+            p = filedialog.askopenfilename(parent=self, title="Source de l'upload",
+                                           initialdir=self.cfg.get("seed_dir") or self.cfg.get("last_dir") or None)
+            if not p:
+                p = filedialog.askdirectory(parent=self, title="Ou dossier source",
+                                            initialdir=self.cfg.get("seed_dir") or None)
+            if not p:
+                return
+            guess = Path(p)
+        fix["infohash"] = ih
+        self._pending_fix = (fix, torrent)
+        self.session = Session()
+        self.show(0)
+        self.steps[0].analyze(guess)
+
     def show(self, i: int):
         Tooltip.hide_all()
         SESS.save(self.session, SESSION_PATH)        # reprise possible après fermeture ou plantage
+        self.render_fix_banner(i)
         for st in self.steps:
             st.pack_forget()
         self.current = i
@@ -341,6 +436,12 @@ class App(tk.Tk):
         self._stop_seed()
         s = self.session = Session(src=src, ranked=ranked, profile=profile, analysis=analysis)
         s.sub_id = profile.guess_sub(s.ctx())
+        pending = getattr(self, "_pending_fix", None)
+        if pending:                                   # correction d'un upload publié : même torrent, même info-hash
+            self._pending_fix = None
+            s.correction, s.torrent = pending
+            s.infohash = s.correction.get("infohash", "")
+            self.render_fix_banner(self.current)
 
     def invalidate_torrent(self):
         self.session.torrent_for = ""
@@ -492,6 +593,7 @@ class App(tk.Tk):
     def quit_for_update(self):
         """Fermeture immédiate : le script de mise à jour attend la fin du processus."""
         SESS.save(self.session, SESSION_PATH)          # l'upload en cours sera proposé au redémarrage
+        self._stop_seed()
         try:
             if self.state() == "normal":
                 self.cfg.update({"window_geometry": self.geometry()})
@@ -577,7 +679,12 @@ def main():
     if "--selftest" in sys.argv:
         selftest(sys.argv[sys.argv.index("--selftest") + 1])
         return
+    if "--finish-update" in sys.argv:                  # nouvelle version : remplace Forge411.exe puis le relance
+        return updater.finish_update(sys.argv[sys.argv.index("--finish-update") + 1:])
+    if "--cleanup-update" in sys.argv:
+        updater.cleanup_update(sys.argv[sys.argv.index("--cleanup-update") + 1])
     App().mainloop()
+    os._exit(0)                                        # aucun thread restant ne retient le processus
 
 
 if __name__ == "__main__":

@@ -1,8 +1,10 @@
 """
 XXX (adulte, -18) : scènes et films de studios, VR, JAV, hentai, images, ebooks, jeux.
 
-Règles du wiki C411 (pages « Adulte » et « Le Nommage de l'upload ») :
-- vidéo : [Studio].Titre.Acteur.[Catégorie].Résolution.Codec ; pack : [Studio][PACK]… ;
+Règles du wiki C411 (pages « Adulte » et « Le Nommage de l'upload ») et de la Team Pending :
+- vidéo : [Studio].Titre.Date.Acteur.Langue.Résolution.Source.CodecAudio.CodecVidéo-TEAM : la source suit
+  la résolution, la date suit le titre ; catégorie non hétéro en tête, entre crochets ([Studio][LESBIAN]) ;
+  pack : [Studio][PACK]… ; au moins 3 captures (4 pour un pack) sur postimg.cc ou zupimages.net ;
   JAV : JAV.[CODE].Titre.Romanise ; hentai vidéo : règles des séries + préfixe [HENTAI] ;
 - images : [Studio].Titre.Acteur.[Catégorie][JPG]-Tag, un seul critère d'unification ;
 - manga / doujinshi et magazines : règles des ebooks, en français, anglais ou japonais (coréen pour un manhwa) ;
@@ -187,10 +189,10 @@ class XxxProfile(Profile):
     subcategories = {SUB_FILMS: "Films", SUB_VR: "VR", SUB_HENTAI: "Hentai", SUB_IMAGES: "Images",
                      SUB_EBOOKS: "Ebooks", SUB_GAMES: "Jeux"}
     provider = None
-    template = ("[Studio].Titre.Acteur.[Catégorie].Langue.Source.Résolution.Audio.Codec-Team · "
+    template = ("[Studio][Catégorie].Titre.Date.Acteur.Langue.Résolution.Source.Audio.Codec-Team · "
                 "[Studio][PACK]… · JAV.[CODE].Titre.Romanise · [HENTAI].Titre.S01… · [Studio].Titre.Acteur.[JPG]-Tag")
     hint = ("Productions professionnelles uniquement : amateur, rips d'hébergeurs et contenus tolérance zéro interdits. "
-            "Précise la catégorie si elle n'est pas hétéro.")
+            "Catégorie non hétéro en tête entre crochets, date après le titre, source après la résolution.")
 
     _video = VideoProfile()
     _book = EbookProfile()
@@ -320,9 +322,15 @@ class XxxProfile(Profile):
             rest = rest.replace(jav.group(0), "")
         tokens = [t for t in re.split(r"[.\s_]+", re.sub(r"-[A-Za-z0-9]+$", "", rest)) if t]
         stop = {"WEB", "WEBRIP", "WEB-DL", "1080P", "720P", "2160P", "4K", "5K", "6K", "7K", "8K", "X264", "X265",
-                "H264", "H265", "HEVC", "AVC", "AAC", "AAC2", "MP4", "MKV", "SBS", "LR", "180", "360"} | set(LANGS)
-        title = ".".join(t for t in tokens if t.upper() not in stop and t.strip("[]").upper() != "PACK"
-                         and not re.fullmatch(r"\d\.\d|\d{3,4}p", t, re.I))
+                "H264", "H265", "HEVC", "AVC", "AAC", "AAC2", "AACLC", "MP4", "MKV", "SBS", "LR", "180", "360", "2.0",
+                "5.1", "DVD", "DVDRIP", "BLURAY", "HDTV", "SDTV"} | set(LANGS)
+        kept = []
+        for t in tokens:                       # le titre s'arrête aux informations techniques
+            if t.upper() in stop or re.fullmatch(r"\d{3,4}p|[5-8]K", t, re.I):
+                break
+            if t.strip("[]").upper() != "PACK" and t.strip("[]").upper() not in CATEGORIES[1:]:
+                kept.append(t)
+        title = ".".join(kept)
         performers = ""
         ident = ctx.ident if ctx.ident and ctx.ident.provider == "tpdb" else None
         if ident:                                  # fiche ThePornDB : studio, date, titre, interprètes
@@ -331,29 +339,34 @@ class XxxProfile(Profile):
             title = ident.title or title
             performers = ".".join(slug(n) for n in ident.raw.get("performers", [])[:3])
         source = detect_source(raw) or "WEB"
-        resolution = vi.resolution_tag(mf) or (re.search(r"\b([5-8]K)\b", raw.upper()) or [None, ""])[1]
+        resolution = vi.resolution_tag(mf) or (re.search(r"\b([5-8]K|\d{3,4}P)\b", raw.upper()) or [None, ""])[1] \
+            .replace("P", "p")
         multi = len(va.videos) > 1
         mode = "JAV" if re.match(r"^jav\b", raw, re.I) or (jav and not studio) else "Studio"
+        category = next((c for c in CATEGORIES[1:] if re.search(rf"(?<![A-Za-z]){c}(?![A-Za-z])", raw, re.I)
+                         and (c != "BI" or re.search(r"[.\[]BI[.\]]", raw))), "")
         return [
             Part("mode", "Modèle", mode, choices=["Studio", "JAV"], width=8,
-                 hint="Studio : [Studio].Titre.Acteur… JAV : JAV.[CODE].Titre.Romanise (code obligatoire)."),
+                 hint="Studio : [Studio].Titre.Date.Acteur… JAV : JAV.[CODE].Titre.Romanise (code obligatoire)."),
             Part("studio", "Studio / site", studio, width=18,
                  hint="Nom du studio entre crochets en tête du nom, ex. [Brazzers], [Nubile Films]."),
+            Part("category", "Catégorie (si non hétéro)", category, choices=CATEGORIES, width=10,
+                 hint="Obligatoire si le contenu n'est pas hétéro : placée en tête, entre crochets, après le studio "
+                      "([Studio][LESBIAN]…)."),
             Part("pack", "Pack", "[PACK]" if multi else "", choices=["", "[PACK]"], width=8,
                  hint="Obligatoire dès que le torrent contient plusieurs médias (même studio ou même interprète, même format)."),
             Part("code", "Code JAV", f"{jav.group(1)}-{jav.group(2)}" if jav else "", width=10,
                  hint="Référence du JAV, ex. SSIS-123. Obligatoire en JAV."),
-            Part("date", "Date", date, width=10, hint="Date de sortie de la scène (AAAA.MM.JJ), si le studio en donne une."),
             Part("title", "Titre", slug(title.replace(".", " ")), width=30,
                  hint="Titre de la scène ou du film ; romanisé pour un JAV."),
+            Part("date", "Date", date, width=10, hint="Date de sortie (AAAA.MM.JJ), placée après le titre."),
             Part("performers", "Interprètes", performers, width=24,
                  hint="Acteur(s) / actrice(s) ou réalisateur, ex. Kenna.James. Obligatoire pour un pack par interprète."),
-            Part("category", "Catégorie (si non hétéro)", "", choices=CATEGORIES, width=10,
-                 hint="Obligatoire si le contenu n'est pas hétéro : GAY, LESBIAN, TRANS…"),
             Part("language", "Langue", _lang(mf, raw), choices=LANGS, width=10,
-                 hint="Toutes les langues sont acceptées en XXX."),
-            Part("source", "Source", source, choices=["WEB", "WEBRip", "DVD", "DVDRip", "BluRay", "HDTV", "SDTV"], width=8),
+                 hint="Toutes les langues sont acceptées en XXX. VO ou ENGLISH pour une scène en anglais."),
             Part("resolution", "Résolution", resolution, width=8, hint="1080p, 2160p… En VR : 5K, 6K, 7K, 8K."),
+            Part("source", "Source", source, choices=["WEB", "WEBRip", "DVD", "DVDRip", "BluRay", "HDTV", "SDTV"],
+                 width=8, hint="Après la résolution. WEB pour un WEB-DL, WEBRip pour un rip."),
             Part("audio", "Audio", vi.audio_tag(mf), width=10, hint="Pas de débit audio minimum en XXX."),
             Part("video", "Codec vidéo", vi.video_codec_tag(mf, source), width=8),
             Part("team", "Team", self._team(raw, va, jav), width=12,
@@ -400,14 +413,15 @@ class XxxProfile(Profile):
                             + [p.get("category", "")] if x)
             return f"{name}{'.' if name else ''}{p.get('formats', '')}-{p.get('team') or 'NOTAG'}"
         if "mode" in p and "studio" in p:                   # scène / film / JAV
-            tech = [p.get(k, "").strip(". ") for k in ("language", "source", "resolution", "audio", "video")]
-            cat = p.get("category", "")
+            # Team Pending : Langue.Résolution.Source.CodecAudio.CodecVidéo, catégorie en tête, date après le titre
+            tech = [p.get(k, "").strip(". ") for k in ("language", "resolution", "source", "audio", "video")]
+            cat = _bracket(p.get("category", "").upper())
             if p.get("mode") == "JAV":
-                head = "JAV" + (f".[{p['code'].strip('[]').upper()}]" if p.get("code") else "") + p.get("pack", "")
-                body = [_slug(p.get("title", "")), _slug(p.get("performers", "")), cat] + tech
+                head = "JAV" + (f".[{p['code'].strip('[]').upper()}]" if p.get("code") else "") + cat + p.get("pack", "")
+                body = [_slug(p.get("title", "")), p.get("date", ""), _slug(p.get("performers", ""))] + tech
             else:
-                head = _bracket(p.get("studio", "")) + p.get("pack", "")
-                body = [p.get("date", ""), _slug(p.get("title", "")), _slug(p.get("performers", "")), cat] + tech
+                head = _bracket(p.get("studio", "")) + cat + p.get("pack", "")
+                body = [_slug(p.get("title", "")), p.get("date", ""), _slug(p.get("performers", ""))] + tech
             name = ".".join(x for x in [head] + body if x)
             return f"{name}-{p.get('team') or 'NOTAG'}"
         if "set" in p or "date" in p and "format" in p:     # ebook délégué
@@ -480,8 +494,48 @@ class XxxProfile(Profile):
         if mf is not None and vi.MEDIAINFO_OK and mf.video:
             if any(g in mf.video.library.lower() for g in ("nvenc", "qsv", "amf", "vce", "quicksync")):
                 c.errors.append("Encodage GPU (NVENC, QSV, AMF) interdit sur C411.")
+        self._validate_order(name, p, c)
         if not p.get("category"):
             c.infos.append("Contenu non hétéro : la catégorie (GAY, LESBIAN, TRANS…) est obligatoire dans le nom.")
+
+    @staticmethod
+    def _validate_order(name, p, c):
+        """Ordre exigé par la Team Pending : [Studio][CAT].Titre.Date.Acteur.Langue.Résolution.Source.Audio.Vidéo-TEAM."""
+        body = re.sub(r"^(\[[^\]]*\]|JAV\.?)+\.?", "", name, flags=re.I)
+        body = re.sub(r"-[^.\-]+$", "", body)
+        toks = body.split(".")
+        up = [t.upper() for t in toks]
+
+        def pos(*vals):
+            return next((i for i, t in enumerate(up) if t in vals), -1)
+        res = next((i for i, t in enumerate(up) if re.fullmatch(r"\d{3,4}P|[2-8]K", t)), -1)
+        src = pos("WEB", "WEBRIP", "WEB-DL", "DVD", "DVDRIP", "BLURAY", "HDTV", "SDTV")
+        lang = pos(*[l.upper() for l in LANGS])
+        if res >= 0 and src >= 0 and src < res:
+            c.errors.append("La source doit être placée après la résolution (…2160p.WEB…).")
+        if lang >= 0 and res >= 0 and lang > res:
+            c.errors.append("La langue se place avant la résolution (…ENGLISH.2160p.WEB…).")
+        if lang < 0:
+            (c.warnings if p.get("mode") == "JAV" else c.errors).append(
+                "Indique la langue (ENGLISH, VO, FRENCH, MULTI…) avant la résolution.")
+        cats = [x for x in CATEGORIES[1:] if x in up]
+        if cats:
+            c.errors.append(f"La catégorie {cats[0]} se place en tête, entre crochets : [Studio][{cats[0]}].Titre…")
+        head = re.match(r"^((\[[^\]]*\])+)", name)
+        if p.get("category") and not (head and f"[{p['category'].upper()}]" in head.group(1).upper()):
+            c.errors.append(f"Catégorie [{p['category'].upper()}] absente de l'en-tête du nom.")
+        date = next((i for i, t in enumerate(toks) if re.fullmatch(r"(19|20)\d\d", t)
+                     and i + 2 < len(toks) and re.fullmatch(r"\d\d", toks[i + 1]) and re.fullmatch(r"\d\d", toks[i + 2])), -1)
+        if date == 0 and len(toks) > 3:
+            c.errors.append("La date se place après le titre : [Studio].Titre.AAAA.MM.JJ.Acteur…")
+
+    def shot_rule(self, ctx):
+        """Team Pending XXX : 3 captures hors bannière (4 pour un pack), sur postimg.cc ou zupimages.net."""
+        from ..rules import XXX_SHOT_HOSTS, ShotRule
+        a = ctx.analysis
+        pack = "[PACK]" in (ctx.name or "").upper() or bool(a and a.kind == "video" and a.video
+                                                              and len(a.video.videos) > 1)
+        return ShotRule(minimum=4 if pack else 3, hosts=XXX_SHOT_HOSTS, hosts_label="postimg.cc ou zupimages.net")
 
     def details(self, ctx):
         mode = self._mode(ctx)

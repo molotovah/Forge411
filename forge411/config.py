@@ -31,6 +31,7 @@ def config_dir() -> Path:
 CONFIG_PATH = config_dir() / "config.json"
 HISTORY_PATH = config_dir() / "history.jsonl"
 SESSION_PATH = config_dir() / "session.pkl"               # upload en cours (reprise)
+UPLOADS_DIR = config_dir() / "uploads"                    # copie de chaque upload envoyé (corrections)
 PROFILE_HISTORY_PATH = config_dir() / "profile-history.jsonl"
 
 DEFAULTS = {

@@ -364,17 +364,39 @@ class XxxTests(unittest.TestCase):
                 "title": "Her.Biggest.Fan", "performers": "Kenna.James", "category": "", "language": "ENGLISH",
                 "source": "WEB", "resolution": "7K", "audio": "AAC2", "video": "x265", "team": "Tarz"}
         self.assertEqual(x.build(base),
-                         "[BadoinkVR].2022.06.28.Her.Biggest.Fan.Kenna.James.ENGLISH.WEB.7K.AAC2.x265-Tarz")
+                         "[BadoinkVR].Her.Biggest.Fan.2022.06.28.Kenna.James.ENGLISH.7K.WEB.AAC2.x265-Tarz")
+        # Retour de la Team Pending : catégorie en tête, date après le titre, source après la résolution
+        lez = {**base, "studio": "ExCoGiGirls", "date": "2023.12.20", "title": "Lezzzzz.Be.Friends",
+               "performers": "Amber.Moore.Hannah.Roxanne", "category": "LESBIAN", "resolution": "2160p",
+               "audio": "AAC.2.0", "video": "x264", "team": ""}
+        self.assertEqual(x.build(lez), "[ExCoGiGirls][LESBIAN].Lezzzzz.Be.Friends.2023.12.20.Amber.Moore.Hannah."
+                                       "Roxanne.ENGLISH.2160p.WEB.AAC.2.0.x264-NOTAG")
         self.assertEqual(x.build({**base, "studio": "Nubile Films", "date": "", "title": "Dating.My.Stepson.4",
                                   "performers": "", "language": "", "resolution": "1080p", "audio": "AAC.2.0",
                                   "video": "x264", "team": ""}),
-                         "[Nubile Films].Dating.My.Stepson.4.WEB.1080p.AAC.2.0.x264-NOTAG")
+                         "[Nubile Films].Dating.My.Stepson.4.1080p.WEB.AAC.2.0.x264-NOTAG")
         self.assertEqual(x.build({**base, "studio": "LoveHerFeet", "pack": "[PACK]", "date": "", "title": "Siterip.2019-2024",
                                   "performers": "", "category": "GAY", "language": "VO", "resolution": "1080p",
                                   "audio": "AAC", "team": ""}),
-                         "[LoveHerFeet][PACK].Siterip.2019-2024.GAY.VO.WEB.1080p.AAC.x265-NOTAG")
+                         "[LoveHerFeet][GAY][PACK].Siterip.2019-2024.VO.1080p.WEB.AAC.x265-NOTAG")
         jav = {k: "" for k in base} | {"mode": "JAV", "code": "ssis-123", "title": "Hikari No Yume"}
         self.assertEqual(x.build(jav), "JAV.[SSIS-123].Hikari.No.Yume-NOTAG")
+
+    def test_scene_order_rules(self):
+        from forge411.model import Check
+        x = get("xxx")
+        p = {"category": "LESBIAN"}
+
+        def errs(name, parts=p):
+            c = Check()
+            x._validate_order(name, parts, c)
+            return " ".join(c.errors)
+        old = "[ExCoGiGirls].2023.12.20.Lezzzzz.Be.Friends.Amber.Moore.LESBIAN.ENGLISH.WEB.2160p.AAC.2.0.x264-NOTAG"
+        e = errs(old)
+        for what in ("source doit être placée après", "en tête", "date se place après"):
+            self.assertIn(what, e)
+        self.assertEqual(errs("[ExCoGiGirls][LESBIAN].Lezzzzz.Be.Friends.2023.12.20.Amber.Moore.ENGLISH.2160p.WEB."
+                              "AAC.2.0.x264-NOTAG"), "")
 
     def test_image_name(self):
         x = get("xxx")
@@ -864,13 +886,95 @@ class UpdaterTests(unittest.TestCase):
             with self.assertRaises(updater.UpdateError):
                 updater.download(short, dest)
 
-    def test_swap_script(self):
-        from forge411.updater import swap_script
-        s = swap_script(Path("C:/Apps/Forge411.exe"), Path("C:/Apps/Forge411.new.exe"), [111, 222])
-        self.assertIn('find " 111 "', s)
-        self.assertIn('find " 222 "', s)
-        self.assertLess(s.index(":done222"), s.index(":swap"))
-        self.assertIn("start \"\"", s)
+    def test_finish_update_replaces_target(self):
+        from unittest import mock
+        from forge411 import updater
+        with tempfile.TemporaryDirectory() as d:
+            new, target = Path(d) / updater.UPDATE_NAME, Path(d) / "Forge411.exe"
+            new.write_bytes(b"MZnew")
+            target.write_bytes(b"MZold")
+            launched = []
+            with mock.patch.object(updater.sys, "executable", str(new)), \
+                    mock.patch.object(updater, "_launch", lambda exe, *a: launched.append((Path(exe).name, a))):
+                self.assertEqual(updater.finish_update([str(target)]), 0)
+            self.assertEqual(target.read_bytes(), b"MZnew")
+            self.assertEqual(launched, [("Forge411.exe", ("--cleanup-update", str(new.resolve())))])
+
+
+class RulesTests(unittest.TestCase):
+    def test_screenshots_and_hosts(self):
+        from forge411 import rules as R
+        banner = "https://cdn.theporndb.net/scene/a.jpg"
+        desc = (f"[img]{banner}[/img][img]https://i.postimg.cc/a/1.png[/img][img]https://i.postimg.cc/a/2.png[/img]"
+                "[img]https://img1.pixhost.to/images/1/3.png[/img][img]https://thumb.theporndb.net/x.jpg[/img]")
+        rule = R.ShotRule(minimum=3, hosts=R.XXX_SHOT_HOSTS, hosts_label="postimg.cc ou zupimages.net")
+        c = R.check_description(desc, rule, banner)
+        self.assertTrue(any("thumb.theporndb.net" in e for e in c.errors))     # non affichée par C411
+        self.assertTrue(any("2 sur 3" in e for e in c.errors))                 # pixhost ne compte pas en XXX
+        ok = desc.replace("img1.pixhost.to/images/1", "i.postimg.cc/b").replace(
+            "[img]https://thumb.theporndb.net/x.jpg[/img]", "")
+        self.assertEqual(R.check_description(ok, rule, banner).errors, [])
+        self.assertEqual(R.check_description("[img]https://image.tmdb.org/p.jpg[/img]", R.ShotRule(minimum=3)).errors[0][:22],
+                         "Captures d'écran : 0 s")
+
+    def test_profile_rules(self):
+        from forge411.profiles.base import Ctx
+        from forge411.model import Source
+        from types import SimpleNamespace as N
+        src = Source(Path("a.mkv"), False, [Path("a.mkv")])
+        self.assertEqual(get("game").shot_rule(Ctx(src=src)).minimum, 3)
+        self.assertEqual(get("app").shot_rule(Ctx(src=src)).minimum, 2)
+        x = get("xxx")
+        one = Ctx(src=src, analysis=N(kind="video", video=N(videos=[1])), name="[S].T.1080p.WEB-NOTAG")
+        self.assertEqual(x.shot_rule(one).minimum, 3)
+        pack = Ctx(src=src, analysis=N(kind="video", video=N(videos=[1, 2])), name="[S][PACK].T-NOTAG")
+        self.assertEqual(x.shot_rule(pack).minimum, 4)
+
+
+class CorrectionTests(unittest.TestCase):
+    MSG = ("Merci pour l'upload, mais voici des points à corriger avant validation : 1. ➡️ Description XXX / "
+           "Screenshots - ❌ : Il faut au minimum 3 screenshot(s) hors images bannières dans la description XXX "
+           "(détecté 0) - 🛠️ : Utilise postimg.cc ou zupimages.net 2. ➡️ Nommage XXX > Films - ❌ : La Source doit "
+           "être placée après la résolution dans le titre. 3. ➡️ Disponibilite du torrent - ❌ : Il n'y a aucun Seed "
+           "sur le torrent, attention ! 4. Le tag LESBIAN doit être au début [LESBIAN]. Merci de mettre la date après "
+           "le titre. Merci d'avance pour la correction 🙏 ℹ️ Retrouve la documentation et les guides dans le wiki")
+
+    def test_parse(self):
+        from forge411 import correction as F
+        pts = F.parse(self.MSG)
+        self.assertEqual([p.step for p in pts], [F.STEP_PREZ, F.STEP_NAME, F.STEP_PUBLISH, F.STEP_NAME])
+        self.assertEqual(F.shots_needed(pts), 3)
+        self.assertEqual(F.infohash_of("https://c411.org/torrents/9FB0A873A8943D967ACE770D0585E81FDA181203"),
+                         "9fb0a873a8943d967ace770d0585e81fda181203")
+
+    def test_torrent_info_roundtrip(self):
+        from forge411.torrent import create_torrent, torrent_info
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "video.mkv"
+            f.write_bytes(b"x" * 5000)
+            ih = create_torrent(f, "https://t/a", Path(d) / "a.torrent")
+            self.assertEqual(torrent_info(Path(d) / "a.torrent"), ("video.mkv", ih))
+
+
+class ClientHelpTests(unittest.TestCase):
+    def test_mapping_suggestion(self):
+        from forge411 import clients as C
+        self.assertEqual(C.unc_host(r"\\192.168.1.251\Torrents\Seed"), "192.168.1.251")
+        self.assertEqual(C.suggest_mapping(r"\\NAS\Torrents\Seed\c411", "/downloads/complete"),
+                         (r"\\NAS\Torrents", "/downloads"))
+        self.assertEqual(C.suggest_mapping(r"D:\Seed", "/downloads"), ("", ""))
+        self.assertFalse(C.is_local("http://192.168.1.251:8587"))
+        self.assertTrue(C.is_local("http://localhost:8080"))
+
+    def test_copy_file_progress(self):
+        from forge411.files import copy_file
+        with tempfile.TemporaryDirectory() as d:
+            a, b = Path(d) / "a", Path(d) / "b"
+            a.write_bytes(b"y" * 40_000_000)
+            seen = []
+            copy_file(a, b, seen.append)
+            self.assertEqual(b.stat().st_size, 40_000_000)
+            self.assertEqual(seen[-1], 40_000_000)
 
 
 if __name__ == "__main__":
