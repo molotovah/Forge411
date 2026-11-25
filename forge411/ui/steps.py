@@ -276,6 +276,7 @@ class SourceStep(Step):
 
     def move_to_seed(self):
         src, dest = self.s.src, Path(self.app.cfg.get("seed_dir"))
+        old_path = src.path
         if not messagebox.askyesno("Déplacer", f"Déplacer « {src.path.name} » vers\n{dest} ?", parent=self):
             return
         self._start_loading("Déplacement…")
@@ -284,6 +285,7 @@ class SourceStep(Step):
 
         def ok(_):
             self._stop_loading()
+            fs.remap_paths(self.s.analysis, old_path, src.path)   # captures, NFO… lisent la vidéo au nouvel endroit
             self.app.invalidate_torrent()
             self.render()
         import time
@@ -806,10 +808,11 @@ class NameStep(Step):
                 for old_path, new_path in fs.rename_files(s.src, fixes):
                     s.profile.on_renamed(s.ctx(), old_path.name, new_path.name)
             elif target is not None and s.src.path.name != target + ("" if s.src.is_dir else s.src.path.suffix):
-                old = s.src.path.name
+                old, old_path = s.src.path.name, s.src.path
                 fs.rename(s.src, target)
                 if not s.src.is_dir:
                     s.profile.on_renamed(s.ctx(), old, s.src.path.name)
+                fs.remap_paths(s.analysis, old_path, s.src.path)
             else:
                 done(True)
                 return

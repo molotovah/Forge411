@@ -62,6 +62,47 @@ def _relocate(src: Source, new_path: Path):
     src.files = [new_path / f.relative_to(old) for f in src.files] if src.is_dir else [new_path]
 
 
+def remap_paths(obj, old: Path, new: Path, _seen: set = None):
+    """Après un déplacement ou un renommage de la source : remplace, dans un objet d'analyse (dataclasses,
+    listes, dicts imbriqués), chaque chemin situé sous old par son équivalent sous new."""
+    old, new = Path(old), Path(new)
+    if old == new:
+        return obj
+
+    def conv(v):
+        if isinstance(v, Path):
+            if v == old:
+                return new
+            try:
+                return new / v.relative_to(old)
+            except ValueError:
+                return v
+        walk(v)
+        return v
+
+    def walk(o):
+        if o is None or isinstance(o, (str, bytes, int, float, bool)) or id(o) in seen:
+            return
+        seen.add(id(o))
+        if isinstance(o, list):
+            o[:] = [conv(v) for v in o]
+        elif isinstance(o, dict):
+            for k in list(o):
+                o[k] = conv(o[k])
+        elif isinstance(o, tuple):
+            for v in o:
+                walk(v)
+        elif hasattr(o, "__dict__") and not isinstance(o, type):
+            for k, v in list(vars(o).items()):
+                nv = conv(v)
+                if nv is not v:
+                    setattr(o, k, nv)
+
+    seen = _seen if _seen is not None else set()
+    walk(obj)
+    return obj
+
+
 def rename(src: Source, new_name: str) -> Path:
     """Renomme le fichier (en gardant l'extension) ou le dossier."""
     target = src.path.with_name(new_name + ("" if src.is_dir else src.path.suffix))

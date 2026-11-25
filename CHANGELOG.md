@@ -2,6 +2,12 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [SemVer](https://semver.org/lang/fr/).
 
+## [2.1.5] - 2026-11-25
+
+### Corrigé
+- Captures : après « Déplacer dans le dossier de seed » (ou le renommage d'un dossier), ffmpeg lit la vidéo à son nouvel emplacement au lieu de l'ancien (« No such file or directory »).
+- Paramètres : options rognées sous Windows avec un affichage à 125 % ou 150 % ; les dimensions suivent désormais l'échelle de l'écran.
+
 ## [2.1.4] - 2026-11-25
 
 ### Corrigé

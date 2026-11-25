@@ -113,6 +113,15 @@ def enable_dpi_awareness():
             pass
 
 
+def px(widget, n: int) -> int:
+    """Taille en pixels mise à l'échelle de l'affichage Windows (125 %, 150 %…) : les polices grossissent
+    avec le DPI, les dimensions fixées en pixels doivent suivre sinon le contenu est rogné."""
+    try:
+        return round(n * widget.winfo_fpixels("1i") / 96)
+    except tk.TclError:
+        return n
+
+
 def dark_title_bar(root: tk.Tk):
     """Barre de titre Windows assortie au mode (sombre ou claire)."""
     if sys.platform != "win32":

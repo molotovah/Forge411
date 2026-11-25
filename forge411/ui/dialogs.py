@@ -20,6 +20,8 @@ class Dialog(tk.Toplevel):
         self.transient(parent.winfo_toplevel())
         self.resizable(True, True)
         top = parent.winfo_toplevel()
+        width = min(T.px(self, width), self.winfo_screenwidth() - 40)
+        height = min(T.px(self, height), self.winfo_screenheight() - 80)
         x = top.winfo_rootx() + (top.winfo_width() - width) // 2
         y = top.winfo_rooty() + (top.winfo_height() - height) // 3
         self.geometry(f"{width}x{height}+{max(x, 0)}+{max(y, 0)}")
@@ -40,11 +42,13 @@ class SettingsDialog(Dialog):
 
     SECTIONS = (("account", "◆", "Compte C411"), ("sources", "◎", "Bases en ligne"), ("uploads", "▤", "Uploads"),
                 ("client", "⇅", "Client torrent"), ("shots", "▣", "Captures"), ("general", "⚙", "Général"))
-    LABEL_W = 165                      # largeur de la colonne des libellés (px)
+    LABEL_W = 165                      # largeur de la colonne des libellés (px à 100 %, mise à l'échelle du DPI)
 
     def __init__(self, parent, cfg: Config, first_run: bool = False, section: str = ""):
         super().__init__(parent, "Paramètres", 920, 680)
-        self.minsize(820, 560)
+        self.LABEL_W = T.px(self, self.LABEL_W)
+        self.minsize(min(T.px(self, 820), self.winfo_screenwidth() - 40),
+                     min(T.px(self, 560), self.winfo_screenheight() - 80))
         self.cfg = cfg
         self.saved = False
         from .. import clients as CL
@@ -76,7 +80,7 @@ class SettingsDialog(Dialog):
               bg=T.SIDEBAR).pack(side="left")
         self.bind("<Control-s>", lambda e: self.save())
 
-        nav = tk.Frame(self, bg=T.SIDEBAR, width=210)
+        nav = tk.Frame(self, bg=T.SIDEBAR, width=T.px(self, 210))
         nav.pack(side="left", fill="y")
         nav.pack_propagate(False)
         tk.Frame(self, bg=T.BORDER, width=1).pack(side="left", fill="y")
@@ -103,7 +107,7 @@ class SettingsDialog(Dialog):
         self.content = tk.Frame(self, bg=T.BG)
         self.content.pack(side="left", fill="both", expand=True)
         self.pages, self.current = {}, ""
-        self._align_tests, self._test_w = False, 62       # largeur réservée au bouton « Tester »
+        self._align_tests, self._test_w = False, T.px(self, 62)       # largeur réservée au bouton « Tester »
 
         # ── Compte C411 ───────────────────────────────────────────────────────
         pg = self._page("account", "Compte C411", "Les deux informations indispensables pour publier.")
@@ -307,7 +311,7 @@ class SettingsDialog(Dialog):
         cell.pack(fill="x")
         if url:
             link(body, url[0], url[1]).pack(fill="x", pady=(2, 0))
-        head.configure(height=48 if (sub or url) else 34)
+        head.configure(height=T.px(self, 48 if (sub or url) else 34))
         return cell
 
     def _secret_cell(self, cell, key):

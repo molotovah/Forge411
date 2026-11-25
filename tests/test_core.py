@@ -692,6 +692,16 @@ class CatalogTests(unittest.TestCase):
         self.assertTrue(v.needs_justification)          # EXTENDED et 2160p : autres jeux de slots
 
 
+class RelocateTests(unittest.TestCase):
+    def test_analysis_follows_moved_file_and_folder(self):
+        va = VideoAnalysis(videos=[MediaFile(path=Path("/dl/a.mp4"))])
+        files.remap_paths({"video": va}, Path("/dl/a.mp4"), Path("/seed/a.mp4"))
+        self.assertEqual(va.main.path, Path("/seed/a.mp4"))
+        pack = VideoAnalysis(videos=[MediaFile(path=Path("/dl/D/e1.mkv")), MediaFile(path=Path("/other/x.mkv"))])
+        files.remap_paths(pack, Path("/dl/D"), Path("/seed/D"))
+        self.assertEqual([v.path for v in pack.videos], [Path("/seed/D/e1.mkv"), Path("/other/x.mkv")])
+
+
 class ScreensTests(unittest.TestCase):
     def test_timestamps_and_bbcode(self):
         from forge411 import screens as S
