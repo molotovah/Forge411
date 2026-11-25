@@ -62,6 +62,9 @@ DEFAULTS = {
     "client_password": "",
     "client_label": "C411",
     "client_auto": True,        # ajouter le torrent au client dès sa création
+    # Client distant (Docker, NAS) : même dossier vu par Forge411 et par le client
+    "client_path_local": "",    # ex. \\192.168.1.251\Torrents
+    "client_path_remote": "",   # ex. /downloads
     # Captures d'écran
     "ffmpeg_path": "",
     "screens_count": 4,

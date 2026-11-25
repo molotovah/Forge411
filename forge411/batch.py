@@ -146,7 +146,8 @@ def send(item: Item, cfg, c411, client=None, progress: Callable[[str], None] = l
     s.torrent, s.torrent_for = out, s.torrent_key
     if client is not None:
         progress("Ajout au client torrent…")
-        client.add(out, s.src.path.parent, s.infohash)
+        from .clients import save_path
+        client.add(out, save_path(cfg, s.src.path.parent), s.infohash)
     progress("Envoi du brouillon…")
     meta_key, meta = s.profile.meta(s.ctx())
     res = c411.save_draft(title=s.name, description=s.description, category_id=s.profile.category_id,

@@ -1370,8 +1370,9 @@ class PublishStep(Step):
         elif s.seed:
             self.seed_lbl.configure(text=s.seed, fg=T.ERROR if s.seed.startswith("✕") else T.TEXT)
         else:
-            self.seed_lbl.configure(text=f"{client.name} : le torrent sera ajouté avec {s.src.path.parent} comme "
-                                         "emplacement des données.", fg=T.MUTED)
+            self.seed_lbl.configure(text=f"{client.name} : le torrent sera ajouté avec "
+                                         f"{CL.save_path(self.app.cfg, s.src.path.parent)} comme emplacement des données.",
+                                    fg=T.MUTED)
 
     def add_to_client(self):
         s = self.s
@@ -1384,7 +1385,7 @@ class PublishStep(Step):
         self.seed_bar.configure(value=0)
         self.seed_bar.pack(fill="x", pady=(8, 0), before=self.seed_btn.master)
         self.render_seed()
-        torrent, save, ih = s.torrent, s.src.path.parent, s.infohash
+        torrent, save, ih = s.torrent, CL.save_path(self.app.cfg, s.src.path.parent), s.infohash
 
         def on_status(st):
             UI.call(self._seed_status, st)

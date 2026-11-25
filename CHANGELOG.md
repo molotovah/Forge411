@@ -2,6 +2,11 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [SemVer](https://semver.org/lang/fr/).
 
+## [2.0.1] - 2026-11-25
+
+### Ajouté
+- Client torrent distant (Docker, NAS) : correspondance des dossiers entre Forge411 et le client (ex. `\\192.168.1.251\Torrents` → `/downloads`), pour que le client retrouve les données à seeder.
+
 ## [2.0.0] - 2026-11-25
 
 Première version publique.

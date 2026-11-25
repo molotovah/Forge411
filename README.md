@@ -181,6 +181,8 @@ Forge411 crée le torrent, affiche ce qu'il reste à vérifier, puis l'envoie :
 
 Dans **Paramètres › Client torrent**, indique qBittorrent, Transmission ou Deluge (interface web activée). Après la création du torrent, Forge411 l'ajoute au client avec le dossier de la source comme emplacement, suit la vérification des données et affiche **En seed** : C411 refuse un torrent publié qui n'est pas déjà seedé. Sans client configuré, ajoute le torrent toi-même (voir *Seed automatique*).
 
+Client sur un autre appareil (Docker, NAS) : renseigne la **correspondance des dossiers**, c'est-à-dire le même dossier vu par Forge411 et par le client, par exemple `\\192.168.1.251\Torrents` côté Windows et `/downloads` dans le conteneur. L'interface web du client doit être joignable depuis ton PC et demander un identifiant.
+
 ## Doublons, slots et justification
 
 <img src="docs/screenshots/17-deja-sur-c411.png" width="820" alt="Déjà sur C411 et justification hors slot">

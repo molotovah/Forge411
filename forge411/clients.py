@@ -230,6 +230,33 @@ class Deluge(_Base):
 CLASSES = {"qbittorrent": QBittorrent, "transmission": Transmission, "deluge": Deluge}
 
 
+def map_path(path, local: str = "", remote: str = "") -> str:
+    """Chemin vu par le client torrent.
+
+    Pour un client distant (Docker, NAS), le même dossier n'a pas le même chemin des
+    deux côtés : « \\\\192.168.1.251\\Torrents\\c411 » pour Windows, « /downloads/c411 » pour le
+    conteneur. Sans correspondance (ou hors du dossier indiqué), le chemin reste inchangé."""
+    p = str(path)
+    local, remote = (local or "").strip(), (remote or "").strip()
+    if not local or not remote:
+        return p
+    norm = lambda s: s.replace("\\", "/").rstrip("/")
+    lp, pp = norm(local), norm(p)
+    if pp.lower() != lp.lower() and not pp.lower().startswith(lp.lower() + "/"):
+        return p
+    rest = pp[len(lp):].lstrip("/")
+    sep = "\\" if "\\" in remote and "/" not in remote else "/"
+    base = remote.rstrip("/\\")
+    if not base and sep == "/":                    # client à la racine « / »
+        return "/" + rest
+    return base + (sep + rest.replace("/", sep) if rest else "")
+
+
+def save_path(cfg, src_parent) -> str:
+    """Dossier des données tel que le client torrent le voit (correspondance des Paramètres)."""
+    return map_path(src_parent, cfg.get("client_path_local"), cfg.get("client_path_remote"))
+
+
 def make(cfg) -> Optional[_Base]:
     """Client configuré dans les Paramètres, ou None."""
     kind = cfg.get("client_kind") or ""

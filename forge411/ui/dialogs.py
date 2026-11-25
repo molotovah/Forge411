@@ -115,7 +115,8 @@ class SettingsDialog(Dialog):
         c = self._card(root, "Client torrent", "Facultatif. Forge411 y ajoute le torrent et attend le seed avant "
                                                "de publier (C411 refuse un torrent qui n'est pas seedé).")
         self.client_kind = tk.StringVar(value=CL.KINDS.get(cfg.get("client_kind") or "", "Aucun"))
-        for k in ("client_url", "client_user", "client_password", "client_label", "ffmpeg_path"):
+        for k in ("client_url", "client_user", "client_password", "client_label", "ffmpeg_path", "client_path_local",
+                  "client_path_remote"):
             self.v[k] = tk.StringVar(value=cfg.get(k) or "")
         grid = tk.Frame(c, bg=T.SURFACE)
         grid.pack(fill="x")
@@ -132,6 +133,13 @@ class SettingsDialog(Dialog):
         Field(grid, "Catégorie / étiquette", self.v["client_label"],
               help="Catégorie qBittorrent, étiquette Transmission ou Deluge (facultatif).").grid(
             row=2, column=0, sticky="ew", padx=(0, 12), pady=(10, 0))
+        Field(grid, "Dossier vu par Forge411", self.v["client_path_local"],
+              help="Client distant (Docker, NAS) : début du chemin des données côté Windows, ex. "
+                   "\\\\192.168.1.251\\Torrents. Vide si le client tourne sur ce PC.").grid(
+            row=3, column=0, sticky="ew", padx=(0, 12), pady=(10, 0))
+        Field(grid, "Même dossier vu par le client", self.v["client_path_remote"],
+              help="Le même dossier dans le client, ex. /downloads pour un conteneur qui monte le partage "
+                   "sur /downloads.").grid(row=3, column=1, sticky="ew", pady=(10, 0))
         self.client_auto = tk.BooleanVar(value=bool(cfg.get("client_auto")))
         ttk.Checkbutton(c, text="Ajouter le torrent au client dès sa création", variable=self.client_auto,
                         style="Card.TCheckbutton").pack(fill="x", pady=(10, 0))

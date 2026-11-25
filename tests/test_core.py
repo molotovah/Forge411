@@ -618,6 +618,19 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(t.s.headers["X-Transmission-Session-Id"], "xyz")
         self.assertTrue(st.seeding)
 
+    def test_map_path(self):
+        from pathlib import PureWindowsPath as W
+        from forge411.clients import map_path
+        share = "\\\\192.168.1.251\\Torrents"
+        self.assertEqual(map_path(W(share + "\\c411\\Film 2008"), share, "/downloads"), "/downloads/c411/Film 2008")
+        self.assertEqual(map_path(W(share.lower() + "\\c411"), share + "\\", "/downloads/"), "/downloads/c411")
+        self.assertEqual(map_path(W(share), share, "/downloads"), "/downloads")
+        self.assertEqual(map_path(W(share + "2\\x"), share, "/downloads"), str(W(share + "2\\x")))   # dossier voisin
+        self.assertEqual(map_path(W("D:\\Films"), share, "/downloads"), "D:\\Films")                # hors correspondance
+        self.assertEqual(map_path(W("Z:\\c411"), "Z:\\", "/"), "/c411")
+        self.assertEqual(map_path(W("D:\\Seed\\c411"), "D:\\Seed", "E:\\Seed"), "E:\\Seed\\c411")
+        self.assertEqual(map_path(W("D:\\Films"), "", ""), "D:\\Films")
+
     def test_make(self):
         from forge411 import clients as CL
         from unittest import mock
