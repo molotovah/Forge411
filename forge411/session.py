@@ -49,6 +49,7 @@ class Session:
     catalog_for: str = ""
     slot_justification: str = ""
     result: Optional[Result] = None
+    shots_dir: Optional[Path] = None   # dossier local des captures extraites (supprimé après publication)
     # Correction après un retour de la Team Pending : {"infohash", "url", "points": [Point], "message"}
     correction: Optional[dict] = None
 
@@ -90,7 +91,9 @@ class Session:
 def save(session: "Session", path: Path) -> bool:
     """Écrit la session (fichier local de l'utilisateur, format pickle). Rien si aucune source."""
     import pickle
-    if not session.src or session.result:
+    if not session.src:          # rien à reprendre ; surtout ne pas effacer la sauvegarde avant sa relecture
+        return False             # au démarrage (l'abandon explicite passe par discard)
+    if session.result:           # envoyé sur C411 : plus rien à reprendre
         discard(path)
         return False
     try:
@@ -98,7 +101,9 @@ def save(session: "Session", path: Path) -> bool:
         tmp.write_bytes(pickle.dumps(session, protocol=pickle.HIGHEST_PROTOCOL))
         tmp.replace(path)
         return True
-    except Exception:            # objet non sérialisable, disque plein… : la sauvegarde est facultative
+    except Exception as e:       # objet non sérialisable, disque plein… : la sauvegarde est facultative
+        import logging
+        logging.warning("Sauvegarde de l'upload en cours impossible : %r", e)
         return False
 
 

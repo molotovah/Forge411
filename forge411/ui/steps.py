@@ -18,7 +18,7 @@ from ..profiles import PROFILES, detect, get, options_payload
 from ..torrent import Cancelled, create_torrent
 from . import theme as T
 from .widgets import (UI, Btn, Card, Field, Images, IssueList, ScrollFrame, TextArea, Tooltip,
-                      autowrap, badge, help_icon, label, link, run_bg)
+                      autowrap, badge, help_icon, label, link, run_bg, wrap_check)
 
 
 class Step(tk.Frame):
@@ -1024,7 +1024,8 @@ class PresentStep(Step):
         adult = s.profile.key == "xxx"
         count = max(int(cfg.get("screens_count") or 4), rule.minimum)
         mf = self._main_video()
-        out = cfg.nfo_dir.parent / "captures" / fs_safe(s.name)
+        out = cfg.captures_dir / fs_safe(s.name)
+        s.shots_dir = out
         if mf is not None:
             ffmpeg = self._ffmpeg()
             if not ffmpeg:
@@ -1257,10 +1258,8 @@ class PublishStep(Step):
         self.seed_btn = Btn(row, "Ajouter au client torrent", self.add_to_client, small=True)
         self.seed_btn.pack(side="left")
         self.seed_confirm = tk.BooleanVar(value=False)
-        self.seed_check = ttk.Checkbutton(seed, text="Mon client torrent seed ce torrent (statut « En partage » / "
-                                                     "Seeding, données vérifiées à 100 %)",
-                                          variable=self.seed_confirm, command=self.render_checks,
-                                          style="Card.TCheckbutton")
+        self.seed_check = wrap_check(seed, self.seed_confirm, "Mon client torrent seed ce torrent (statut « En "
+                                     "partage » / Seeding, données vérifiées à 100 %)", self.render_checks)
         self._seed_cancel = None
         self.cat_box = self.section(self.root, "Déjà sur C411", "Doublons et slots, d'après le catalogue du site.",
                                     help="Recherche des releases existantes (API Torznab). L'attribution d'un slot "
@@ -1331,6 +1330,7 @@ class PublishStep(Step):
                      "url": (s.correction or {}).get("url", ""), "torrent": str(s.torrent), "infohash": s.infohash,
                      "snapshot": str(UPLOADS_DIR / f"{s.infohash}.pkl")})
         fix, s.correction = s.correction, None
+        self._drop_captures()
         SESS.snapshot(s, UPLOADS_DIR / f"{s.infohash}.pkl")
         s.correction = fix
         self.fix_msg.configure(text="✓ Correction enregistrée dans l'historique. Surveille la discussion de "
@@ -1434,6 +1434,9 @@ class PublishStep(Step):
         v = s.catalog
         if v is not None and v.exact:
             items.append(("error", "Une release du même nom existe déjà sur C411 (doublon)."))
+        elif v is not None and getattr(v, "same_version", None):
+            items.append(("warning", "La même version existe déjà sur C411 sous une autre team "
+                                     f"({v.same_version[0].name.rsplit('-', 1)[-1]}) : doublon probable."))
         elif v is not None and v.needs_justification:
             j = len(s.slot_justification.strip())
             items.append(("ok", "Justification hors slot rédigée") if j >= 30 else
@@ -1532,6 +1535,13 @@ class PublishStep(Step):
             return
         self._send("Publication", lambda api: api.upload(**self._payload()))
 
+    def _drop_captures(self):
+        """Supprime en arrière-plan le dossier des captures de cette release (partage réseau possible)."""
+        from ..config import remove_captures
+        cfg, s = self.app.cfg, self.s
+        dirs = (getattr(s, "shots_dir", None), cfg.captures_dir / fs_safe(s.name))
+        threading.Thread(target=remove_captures, args=(cfg, *dirs), daemon=True).start()
+
     def _send(self, what, fn):
         try:
             api = self.app.c411()
@@ -1552,6 +1562,8 @@ class PublishStep(Step):
                 self.s.result = res
                 add_history({"name": self.s.name, "type": self.s.profile.label, "action": what, "url": res.url,
                              "torrent": str(self.s.torrent), "infohash": self.s.infohash, "snapshot": str(snap)})
+                if what == "Publication":       # publiée : les captures locales ne servent plus
+                    self._drop_captures()
             self.render_result(res)
             self.render_checks()
 
@@ -1654,7 +1666,8 @@ class PublishStep(Step):
             (f" {ident.year}" if ident and ident.year and not tmdb else "")
 
         def work():
-            rel = api.search(tmdb_id=tmdb, kind=kind) if tmdb else api.search(query)
+            rel = api.search(tmdb_id=tmdb, kind=kind) if tmdb else \
+                CAT.relevant(api.search(query), ident.title if ident and ident.title else query)
             return CAT.compare(s.name, rel)
 
         def ok(v):
@@ -1678,13 +1691,15 @@ class PublishStep(Step):
             self.just_box.pack_forget()
         if v is None:
             return
-        if not (v.exact or v.same_slot or v.others):
+        if not (v.exact or v.same_version or v.same_slot or v.others):
             label(self.cat_list, "✓  Aucune release similaire trouvée.", fg=T.SUCCESS).pack(fill="x")
             return
         if v.family and video:
             label(self.cat_list, f"Profil estimé de ta release : {CAT.FAMILY_LABELS.get(v.family, v.family)}",
                   fg=T.MUTED, font=T.F_SMALL).pack(fill="x", pady=(0, 6))
-        rows = [("error", r, "même nom") for r in v.exact] + [("warning", r, "même slot probable") for r in v.same_slot] + \
+        rows = [("error", r, "même nom") for r in v.exact] + \
+               [("warning", r, "même version, autre team") for r in getattr(v, "same_version", [])] + \
+               [("warning", r, "même slot probable") for r in v.same_slot] + \
                [("muted", r, "") for r in v.others[:8]]
         colors = {"error": T.ERROR, "warning": T.WARNING, "muted": T.MUTED}
         for tone, r, why in rows[:14]:

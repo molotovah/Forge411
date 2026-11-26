@@ -3,6 +3,7 @@
 import io
 import logging
 import queue
+import re
 import threading
 import tkinter as tk
 import webbrowser
@@ -103,6 +104,7 @@ class Btn(tk.Label):
         w = self.winfo_width()
         h = self.winfo_height()
         if 0 <= e.x <= w and 0 <= e.y <= h:
+            self.configure(bg=self._bg)       # sinon le survol reste affiché si une fenêtre s'ouvre par-dessus
             self.command()
 
     def set_enabled(self, on: bool):
@@ -203,6 +205,57 @@ class TextArea(tk.Frame):
 def label(parent, text="", fg=T.TEXT, font=T.F_UI, bg=None, **kw) -> tk.Label:
     return tk.Label(parent, text=text, fg=fg, font=font,
                     bg=bg or parent.cget("bg"), anchor="w", justify="left", **kw)
+
+
+def wrap_check(parent, var, text: str, command=None, bg: str = None) -> tk.Frame:
+    """Case à cocher dont le libellé passe à la ligne (le texte d'un ttk.Checkbutton serait coupé par la fenêtre).
+    Un clic sur le libellé coche aussi la case."""
+    bg = bg or T.SURFACE
+    row = tk.Frame(parent, bg=bg)
+    cb = ttk.Checkbutton(row, variable=var, style="Card.TCheckbutton", command=command)
+    cb.pack(side="left", anchor="n")
+    lbl = autowrap(label(row, text, bg=bg, cursor="hand2"))
+    lbl.pack(side="left", fill="x", expand=True)
+    lbl.bind("<Button-1>", lambda e: cb.invoke())
+    row.check = cb
+    return row
+
+
+def wrap_name(lbl: tk.Label, text: str) -> tk.Label:
+    """Nom de release sans espaces (Film.2024.1080p…) replié sur la largeur disponible, coupé après les points,
+    tirets ou crochets : un Label Tk ne replie qu'aux espaces."""
+    from tkinter import font as tkfont
+    f = tkfont.Font(font=lbl.cget("font"))
+    parts = re.findall(r"[^.\-\]]+[.\-\]]?|[.\-\]]", text)
+
+    def flow(e=None):
+        width = max(lbl.winfo_width() - 4, 60)
+        lines, cur = [], ""
+        for p in parts:
+            if cur and f.measure(cur + p) > width:
+                lines.append(cur)
+                cur = p
+            else:
+                cur += p
+        lines.append(cur)
+        new = "\n".join(lines)
+        if lbl.cget("text") != new:
+            lbl.configure(text=new)
+    lbl.configure(text=text, anchor="w", justify="left")
+    lbl.bind("<Configure>", flow, add="+")
+    return lbl
+
+
+def style_tree(widget):
+    """Thème des tableaux (ttk.Treeview) : lignes aérées, en-têtes discrets, sélection à la couleur d'accent."""
+    s = ttk.Style(widget)
+    s.configure("Treeview", background=T.SURFACE, fieldbackground=T.SURFACE, foreground=T.TEXT,
+                rowheight=T.px(widget, 28), bordercolor=T.BORDER, borderwidth=0, font=T.F_UI)
+    s.configure("Treeview.Heading", background=T.SURFACE2, foreground=T.MUTED, relief="flat", font=T.F_SMALL_B,
+                padding=(8, 6))
+    s.map("Treeview.Heading", background=[("active", T.HOVER)])
+    s.layout("Treeview", [("Treeview.treearea", {"sticky": "nswe"})])     # sans la bordure claire du thème
+    s.map("Treeview", background=[("selected", T.ACCENT_SOFT)], foreground=[("selected", T.TEXT)])
 
 
 def autowrap(lbl: tk.Label) -> tk.Label:

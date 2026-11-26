@@ -10,5 +10,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: python -m pip install -r requirements.txt
-      - run: python -m unittest -v
+      - run: python -m pip install -r requirements.txt ruff
+      - name: Vérification statique (erreurs)
+        run: ruff check --select F forge411 tests tools
+      - name: Tests (unitaires, bout en bout, règles d'interface)
+        run: python -m unittest -v

@@ -1,7 +1,9 @@
 """Lecture de la source, renommage, déplacement, emplacement de seed."""
 
+import functools
 import os
 import shutil
+import socket
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -39,9 +41,55 @@ def scan(path: Path) -> Source:
                   total_size=sum(f.stat().st_size for f in files))
 
 
+@functools.lru_cache(maxsize=64)
+def _host_addrs(host: str) -> frozenset:
+    """Adresses d'une machine réseau (nom ou IP), en cache : NAS → {192.168.1.251, …}."""
+    try:
+        return frozenset({host} | {ai[4][0].lower() for ai in socket.getaddrinfo(host, None)})
+    except (OSError, UnicodeError):
+        return frozenset({host})
+
+
+def same_host(a: str, b: str) -> bool:
+    """Même machine sous deux noms : \\\\NAS et \\\\192.168.1.251 désignent le même serveur."""
+    a, b = a.lower(), b.lower()
+    return a == b or bool(_host_addrs(a) & _host_addrs(b))
+
+
+def _clean(p) -> str:
+    """Chemin à séparateurs Windows, sans « .. » ni séparateur final (casse conservée)."""
+    s = str(p).replace("/", "\\")
+    unc = s.startswith("\\\\")
+    s = os.path.normpath(s) if os.name == "nt" else s
+    while "\\\\" in s[2:]:
+        s = s[:2] + s[2:].replace("\\\\", "\\")
+    s = s.rstrip("\\")
+    return ("\\\\" + s.lstrip("\\")) if unc else s
+
+
+def rel_under(path, base) -> Optional[str]:
+    """Partie de path située sous base ("" si c'est le même dossier), sinon None. Insensible à la casse ;
+    un partage réseau est reconnu sous le nom de la machine comme sous son IP."""
+    p, b = _clean(path), _clean(base)
+    if not b:
+        return None
+    if p.startswith("\\\\") and b.startswith("\\\\"):
+        ph, _, pr = p[2:].partition("\\")
+        bh, _, br = b[2:].partition("\\")
+        pl, bl = pr.lower(), br.lower()
+        # Résolution réseau seulement si le reste du chemin correspond déjà (évite des requêtes DNS inutiles)
+        if ph.lower() != bh.lower() and (pl == bl or pl.startswith(bl + "\\")) and same_host(ph, bh):
+            p = "\\\\" + bh + ("\\" + pr if pr else "")
+    pl, bl = p.lower(), b.lower()
+    if pl == bl:
+        return ""
+    if pl.startswith(bl + "\\"):
+        return p[len(b) + 1:]
+    return None
+
+
 def same_dir(a, b) -> bool:
-    norm = lambda p: os.path.normcase(os.path.normpath(str(p))).rstrip("\\/")
-    return norm(a) == norm(b)
+    return rel_under(a, b) == ""
 
 
 def seed_location_issue(src: Source, seed_dir: str) -> Optional[str]:

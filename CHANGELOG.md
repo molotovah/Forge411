@@ -2,6 +2,31 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [SemVer](https://semver.org/lang/fr/).
 
+## [2.1.6] - 2026-11-26
+
+### Ajouté
+- Historique refait en tableau : tri par colonne, recherche, filtres (publiés, brouillons, corrections, torrent introuvable), sélection multiple, menu clic droit. « Retirer » enlève des lignes de l'historique et « Retirer les introuvables » enlève d'un coup les uploads dont le .torrent n'existe plus (rien n'est supprimé sur C411 ni sur le disque).
+- Captures : le dossier local des captures d'une release est supprimé dès sa publication (images hébergées, liens dans la présentation). Au démarrage, Forge411 nettoie aussi celles des releases déjà publiées. Les captures d'un brouillon sont gardées.
+- Garde-fous contre les régressions : test de bout en bout de chaque type de contenu, règles d'affichage vérifiées sur le code, hooks git (tests et ruff avant chaque commit), ruff dans la CI, outil de captures du README avec des données de démonstration.
+
+### Corrigé
+- Client torrent distant : un partage désigné par le nom de la machine (\\NAS\Torrents) et par son IP (\\192.168.1.251\Torrents) est reconnu comme le même dossier. Le chemin transmis au client et la vérification du dossier de seed ne se trompent plus.
+- Reprise après fermeture : l'upload en cours était effacé au démarrage au lieu d'être proposé à la reprise.
+- Mon profil : « Actualiser » montre l'actualisation en cours, l'heure de la lecture et l'absence de variation ; dans les 30 s, l'attente restante est indiquée. Icône illisible remplacée.
+- Brouillons : bouton « Actualiser » lisible ; les noms longs passent à la ligne au lieu d'être coupés.
+- Audio : la liste des pistes MusicBrainz n'est plus traduite (« One More Time » restait « Encore une fois »).
+- Ebook : un ISBN erroné dans les métadonnées ne fait plus proposer un autre livre ; le titre et l'auteur passent devant.
+- Genres : « Fiction » ne donne plus « Science-Fiction » ; genres RAWG traduits pour les jeux (Platformer → Plates-formes…).
+- Jeux GOG : « Jeu.v1.0-GOG » et les installateurs setup_jeu_version.exe sont reconnus comme jeux, modèle GOG.
+- Applications : « 7-Zip.24.08.x64 » donnait le titre « 7 » ; le titre saisi à l'étape Identification est repris dans le nom.
+- XXX : pour « [Studio] AAAA-MM-JJ Titre », la date n'est plus recopiée dans le titre et ni le jour (« 15 ») ni le dernier mot ne sont pris pour une team.
+- Déjà sur C411 : la même version publiée par une autre team est signalée comme doublon probable ; les résultats sans rapport (recherche texte) sont écartés.
+- GPS : « NT.2025.10 » garde sa version complète. Impression 3D : « STL » et « Pack » ne sont plus répétés dans le nom.
+- Audio : « Tags » affiche la parenthèse fermante de l'année.
+- Tests : la vérification du débit vidéo ne dépendait pas des données analysées mais de la présence de MediaInfo ; la suite passe désormais aussi sous Linux.
+- Publication : la case « Mon client torrent seed ce torrent » passe à la ligne au lieu d'être coupée.
+- Interface : icône Émulation décalée, barres de défilement horizontales claires, survol resté actif dans le menu latéral après la fermeture d'une fenêtre, cases à cocher des Paramètres coupées, en-têtes du mode lot centrés.
+
 ## [2.1.5] - 2026-11-25
 
 ### Corrigé

@@ -195,7 +195,9 @@ def pick_fuzzy(types: list, out: dict, type_name: str, words: list):
             continue
         for v in t.values:
             nv = norm(v["value"])
-            if nw == nv or (len(nw) > 4 and (nw in nv or nv in nw)):
+            # « Fiction » ne doit pas donner « Science-Fiction » : le mot cherché peut ouvrir le libellé
+            # (Hip Hop → Hip-Hop/Rap) ou le contenir (Electronic ⊃ Electro), pas s'y trouver au milieu
+            if nw == nv or (len(nw) > 4 and (nv.startswith(nw) or nv in nw)):
                 ids.append(v["id"])
     ids = list(dict.fromkeys(ids))[:6]
     if ids:

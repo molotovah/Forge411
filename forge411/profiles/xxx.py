@@ -332,10 +332,11 @@ class XxxProfile(Profile):
         va, src = ctx.analysis.video, ctx.src
         mf, raw = va.main, src.stem
         studio = (re.match(r"^\[([^\]]+)\]", raw) or [None, ""])[1]
-        date = (re.search(r"\b((19|20)\d\d)[.\-](\d\d)[.\-](\d\d)\b", raw) or [""])[0].replace("-", ".")
+        date_raw = (re.search(r"\b((19|20)\d\d)[.\-](\d\d)[.\-](\d\d)\b", raw) or [""])[0]
+        date = date_raw.replace("-", ".")
         jav = JAV_CODE.search(raw.upper())
         rest = re.sub(r"^\[[^\]]*\][. ]?|^jav[. ]", "", raw, flags=re.I)
-        rest = rest.replace(date, "") if date else rest
+        rest = rest.replace(date_raw, "") if date_raw else rest      # 2024-03-15 tel qu'écrit dans le nom
         if jav:
             rest = rest.replace(jav.group(0), "")
         tokens = [t for t in re.split(r"[.\s_]+", re.sub(r"-[A-Za-z0-9]+$", "", rest)) if t]
@@ -511,7 +512,7 @@ class XxxProfile(Profile):
         if not p.get("video"):
             c.warnings.append("Codec vidéo inconnu : ajoute-le (x264, x265, H264…).")
         mf = va.main if va else None
-        if mf is not None and vi.MEDIAINFO_OK and mf.video:
+        if mf is not None and mf.video:         # données d'analyse présentes (sans MediaInfo, video reste vide)
             if any(g in mf.video.library.lower() for g in ("nvenc", "qsv", "amf", "vce", "quicksync")):
                 c.errors.append("Encodage GPU (NVENC, QSV, AMF) interdit sur C411.")
         self._validate_order(name, p, c)

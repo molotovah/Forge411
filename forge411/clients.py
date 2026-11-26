@@ -271,11 +271,11 @@ def map_path(path, local: str = "", remote: str = "") -> str:
     local, remote = (local or "").strip(), (remote or "").strip()
     if not local or not remote:
         return p
-    norm = lambda s: s.replace("\\", "/").rstrip("/")
-    lp, pp = norm(local), norm(p)
-    if pp.lower() != lp.lower() and not pp.lower().startswith(lp.lower() + "/"):
+    from .files import rel_under
+    rest = rel_under(p, local)              # \\\\NAS\\… et \\\\192.168.1.251\\… : même partage
+    if rest is None:
         return p
-    rest = pp[len(lp):].lstrip("/")
+    rest = rest.replace("\\", "/")
     sep = "\\" if "\\" in remote and "/" not in remote else "/"
     base = remote.rstrip("/\\")
     if not base and sep == "/":                    # client à la racine « / »

@@ -16,7 +16,12 @@ python -m unittest -v
 
 Les tests couvrent la création des torrents (vérifiée pièce par pièce), la détection du type de contenu, les tags vidéo déduits des pistes, la construction des noms de chaque catégorie, les tables de type de release (jeux, applications) et les options C411 automatiques. Toute correction de bug vient avec un test qui la reproduit.
 
-`tools/make_demo.sh <dossier>` génère des fichiers de démonstration (œuvres libres) pour essayer chaque type de contenu ; il demande `ffmpeg`.
+- `tests/test_e2e.py` : parcours complet de chaque type de contenu (film, série, album, ebook, jeu, application, émulation, GPS, impression 3D, XXX), de la détection au .torrent et à la reprise de l'upload. MediaInfo, les tags audio et les bases en ligne y sont remplacés par des réponses enregistrées : aucun réseau, résultat identique sous Linux et Windows.
+- `tests/test_ui_rules.py` : règles d'affichage vérifiées sur le code (caractères absents de Segoe UI, emoji à sélecteur de variante, tableaux sans style, cases à cocher au libellé trop long, tailles non mises à l'échelle).
+
+Hooks du dépôt (tests et `ruff` avant chaque commit, refus des mentions interdites dans les messages) : `git config core.hooksPath .githooks`. La CI exécute les mêmes contrôles sous Windows à chaque push, et le workflow Release ne compile pas si un test échoue.
+
+`tools/make_demo.sh <dossier>` génère des fichiers de démonstration (œuvres libres) pour essayer chaque type de contenu ; il demande `ffmpeg`. Sous Windows, `python tools/screenshots.py` régénère les captures Profil, Brouillons et Historique du README avec des données de démonstration.
 
 ## Architecture
 

@@ -175,13 +175,19 @@ Forge411 crée le torrent, affiche ce qu'il reste à vérifier, puis l'envoie :
 
 **Brouillons C411** liste tes brouillons (compteur sur 15), ouvre la page d'upload pour les reprendre et permet d'en supprimer.
 
+## Historique
+
+<img src="docs/screenshots/25-historique.png" width="820" alt="Historique">
+
+**Historique** liste tes uploads dans un tableau. Clique sur un en-tête pour trier. Tu peux chercher par nom ou par type, et filtrer : publiés, brouillons, corrections ou torrent introuvable. La colonne **Torrent** indique si le fichier .torrent existe encore. Un double-clic ouvre la page sur C411. Le clic droit propose de copier le nom, d'afficher le .torrent ou de corriger l'upload. **Retirer** (ou la touche Suppr) enlève les lignes sélectionnées. **Retirer les introuvables** enlève en une fois les uploads dont le .torrent a disparu. Seul l'historique change : rien n'est supprimé sur C411, et les .torrent restent sur le disque.
+
 ## Client torrent et seed
 
 <img src="docs/screenshots/18-parametres-client.png" width="640" alt="Client torrent">
 
 Dans **Paramètres › Client torrent**, choisis qBittorrent, Transmission ou Deluge, ou clique sur **Détecter** : Forge411 cherche les clients sur ce PC et sur la machine de ton dossier de seed. L'aide affichée explique comment activer l'interface web. Après la création du torrent, Forge411 l'ajoute au client avec le dossier de la source comme emplacement, suit la vérification des données et affiche **En seed** : C411 refuse un torrent publié qui n'est pas déjà seedé. Sans client configuré, ajoute le torrent toi-même (voir *Seed automatique*).
 
-Client sur un autre appareil (Docker, NAS) : coche l'option correspondante, puis renseigne la **correspondance des dossiers**, c'est-à-dire le même dossier vu par Forge411 et par le client, par exemple `\\192.168.1.251\Torrents` côté Windows et `/downloads` dans le conteneur. **Proposer** la déduit de ton dossier de seed et du dossier par défaut du client. L'aperçu montre le chemin exact transmis au client. L'interface web du client doit être joignable depuis ton PC et demander un identifiant.
+Client sur un autre appareil (Docker, NAS) : coche l'option correspondante, puis renseigne la **correspondance des dossiers**, c'est-à-dire le même dossier vu par Forge411 et par le client, par exemple `\\192.168.1.251\Torrents` côté Windows et `/downloads` dans le conteneur. **Proposer** la déduit de ton dossier de seed et du dossier par défaut du client. L'aperçu montre le chemin exact transmis au client. Le nom de la machine et son adresse IP sont reconnus comme le même partage : `\\NAS\Torrents` et `\\192.168.1.251\Torrents` conviennent tous deux. L'interface web du client doit être joignable depuis ton PC et demander un identifiant.
 
 ## Corriger une validation
 
@@ -197,7 +203,7 @@ Quand la Team Pending passe ton torrent en **Modification demandée**, clique su
 
 ## Captures d'écran
 
-Pour une vidéo, **Ajouter des captures** (étape Présentation) extrait des images avec ffmpeg, les envoie sur pixhost ou catbox (hébergeurs acceptés par C411) et ajoute les vignettes à la description. Sans vidéo, choisis des images sur le disque. Pour le XXX, la Team Pending ne compte que postimg.cc et zupimages.net. Forge411 extrait les captures dans un dossier et ouvre postimages.org : tu y glisses les images, puis tu colles la liste des **liens directs**. Minimum exigé hors bannière : XXX 3 (4 pour un pack), jeux 3, applications 2. Les images hors liste blanche C411 sont signalées. L'envoi demande toujours ta confirmation. Sans ffmpeg sur le PC, Forge411 propose de l'installer en un clic (Paramètres › Captures d'écran, ou au premier clic sur « Ajouter des captures ») : version stable officielle (FFmpeg-Builds, LGPL) téléchargée depuis GitHub, vérifiée par SHA-256, environ 75 Mo. Un ffmpeg déjà présent (PATH, winget) est utilisé en priorité.
+Pour une vidéo, **Ajouter des captures** (étape Présentation) extrait des images avec ffmpeg, les envoie sur pixhost ou catbox (hébergeurs acceptés par C411) et ajoute les vignettes à la description. Sans vidéo, choisis des images sur le disque. Pour le XXX, la Team Pending ne compte que postimg.cc et zupimages.net. Forge411 extrait les captures dans un dossier et ouvre postimages.org : tu y glisses les images, puis tu colles la liste des **liens directs**. Minimum exigé hors bannière : XXX 3 (4 pour un pack), jeux 3, applications 2. Les images hors liste blanche C411 sont signalées. L'envoi demande toujours ta confirmation. Les captures extraites sont rangées dans le sous-dossier « captures » du dossier de sortie. Forge411 supprime celles d'une release dès qu'elle est publiée : les images sont hébergées et leurs liens figurent dans la présentation. Celles d'un brouillon sont gardées. Sans ffmpeg sur le PC, Forge411 propose de l'installer en un clic (Paramètres › Captures d'écran, ou au premier clic sur « Ajouter des captures ») : version stable officielle (FFmpeg-Builds, LGPL) téléchargée depuis GitHub, vérifiée par SHA-256, environ 75 Mo. Un ffmpeg déjà présent (PATH, winget) est utilisé en priorité.
 
 ## Reprise d'un upload
 

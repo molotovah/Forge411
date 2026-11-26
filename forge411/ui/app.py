@@ -4,6 +4,7 @@ import logging
 import os
 import subprocess
 import sys
+import threading
 import time
 import tkinter as tk
 import traceback
@@ -87,7 +88,9 @@ class App(tk.Tk):
         for w in parts:
             w.bind("<Enter>", lambda e: hover(True), add="+")
             w.bind("<Leave>", lambda e: hover(row.winfo_containing(e.x_root, e.y_root) in parts), add="+")
-            w.bind("<Button-1>", lambda e: command())
+            # survol retiré avant d'ouvrir une fenêtre : la fenêtre modale capte la sortie du pointeur,
+            # la ligne restait surlignée à sa fermeture
+            w.bind("<Button-1>", lambda e: (hover(False), command()))
         return row
 
     def _github_link(self, parent) -> tk.Label:
@@ -128,6 +131,20 @@ class App(tk.Tk):
             self.after(1500, lambda: self.check_updates(manual=False))
         if self.cfg.get("c411_api_key"):
             self.after(800, self.fetch_profile)
+        self.after(3000, self._sweep_captures)
+
+    def _sweep_captures(self):
+        """Supprime les captures des releases publiées (images hébergées, liens dans la présentation)."""
+        from ..config import read_history, remove_captures
+        from .steps import fs_safe
+        cfg = self.cfg
+        names = {h.get("name", "") for h in read_history() if h.get("action") in ("Publication", "Correction")}
+
+        def work():
+            root = cfg.captures_dir
+            if root.is_dir():
+                remove_captures(cfg, *(root / fs_safe(n) for n in names if n))
+        threading.Thread(target=work, daemon=True).start()
 
     # ── Construction ──────────────────────────────────────────────────────
     def _build(self):
@@ -675,7 +692,11 @@ class App(tk.Tk):
         if self.grab_current() is not None and not force:
             return
         UpdateDialog(self, rel).show()
-        self.set_update(self.update_rel)            # « Ignorer cette version » masque le bandeau
+        try:
+            if self.winfo_exists():                 # « Installer » ferme Forge411 pendant la fenêtre
+                self.set_update(self.update_rel)    # « Ignorer cette version » masque le bandeau
+        except tk.TclError:
+            pass
 
     def quit_for_update(self):
         """Fermeture immédiate : la nouvelle version attend la fin de ce processus pour remplacer Forge411.exe.

@@ -292,6 +292,7 @@ class SoftwareTests(unittest.TestCase):
     def test_clean_title(self):
         self.assertEqual(_clean_title("0 A.D. v0.27.0 Portable"), "0 A.D.")
         self.assertEqual(_clean_title("Hades.v1.38.290-GOG"), "Hades")
+        self.assertEqual(_clean_title("7-Zip.24.08.x64"), "7-Zip")
         self.assertEqual(_clean_title("Adobe.Photoshop.2025.v26.1.Multilingual.x64-TEAM"), "Adobe Photoshop 2025")
         self.assertEqual(_clean_title("Cyberpunk 2077 [FitGirl Repack]"), "Cyberpunk 2077")
         self.assertEqual(_version("VLC media player 3.0.21 Windows"), "3.0.21")
@@ -700,6 +701,148 @@ class RelocateTests(unittest.TestCase):
         pack = VideoAnalysis(videos=[MediaFile(path=Path("/dl/D/e1.mkv")), MediaFile(path=Path("/other/x.mkv"))])
         files.remap_paths(pack, Path("/dl/D"), Path("/seed/D"))
         self.assertEqual([v.path for v in pack.videos], [Path("/seed/D/e1.mkv"), Path("/other/x.mkv")])
+
+
+class NetworkPathTests(unittest.TestCase):
+    def test_host_name_and_ip_are_the_same_share(self):
+        from unittest import mock
+        from forge411 import clients as CL
+        addrs = {"nas": {"nas", "192.168.1.251", "192.168.1.131"}, "192.168.1.251": {"192.168.1.251"}}
+        with mock.patch.object(files, "_host_addrs", lambda h: frozenset(addrs.get(h, {h}))):
+            seed = r"\\192.168.1.251\Torrents\Seed\c411"
+            self.assertEqual(CL.map_path(seed, r"\\NAS\Torrents", "/downloads"), "/downloads/Seed/c411")
+            self.assertEqual(CL.map_path(r"\\NAS\Torrents\Seed", "\\\\192.168.1.251\\Torrents\\", "/downloads"),
+                             "/downloads/Seed")
+            self.assertTrue(files.same_dir(r"\\nas\torrents\Seed\c411", seed))
+            self.assertFalse(files.same_dir(r"\\OTHER\Torrents\Seed\c411", seed))
+            self.assertEqual(CL.map_path(r"\\NAS\Films", r"\\192.168.1.251\Torrents", "/downloads"),
+                             r"\\NAS\Films")
+
+
+class TrackListTranslateTests(unittest.TestCase):
+    def test_track_list_is_never_translated(self):
+        from unittest import mock
+        from forge411 import translate
+        ident = Ident(provider="musicbrainz", id="x", kind="album", title="Discovery", overview="1. One More Time (5:20)")
+        with mock.patch.object(translate, "to_french", side_effect=AssertionError("appel réseau")):
+            translate.french_overview(ident, True)
+        self.assertEqual(ident.overview, "1. One More Time (5:20)")
+
+
+class CatalogExtraTests(unittest.TestCase):
+    def test_same_version_other_team_and_noise(self):
+        from forge411 import catalog as CAT
+        from forge411.api import Release
+        mine = "Daft.Punk.Discovery.2001.FLAC[16bit.44.1kHz]-NOTAG"
+        found = [Release(name="Daft.Punk.Discovery.2001.FLAC[16bit.44.1kHz]-CML34", url="", size=0, seeders=1),
+                 Release(name="Harry Potter à l'école des sorciers [WIN FR] [DRM FREE]", url="", size=0, seeders=1)]
+        kept = CAT.relevant(found, "Discovery")
+        self.assertEqual([r.name for r in kept], [found[0].name])
+        v = CAT.compare(mine, kept)
+        self.assertEqual(v.same_version, [found[0]])
+        self.assertFalse(v.exact)
+
+
+class BooksTests(unittest.TestCase):
+    def test_wrong_isbn_falls_back_to_title(self):
+        from unittest import mock
+        from forge411.lookup.books import Books
+        from forge411.model import Match
+        b = Books()
+        wrong = [Match(id="ol:1", title="39 leçons d'économie contemporaine", year="1998", kind="livre")]
+        right = [Match(id="ol:2", title="Le Comte de Monte-Cristo", year="1844", kind="livre")]
+        with mock.patch.object(b, "_find", side_effect=lambda q, a, isbn: wrong if isbn else right):
+            res = b.search("Le Comte de Monte-Cristo", "", "Alexandre Dumas", "9782070405367")
+        self.assertEqual([m.id for m in res], ["ol:2", "ol:1"])
+
+
+class SessionResumeTests(unittest.TestCase):
+    def test_empty_session_keeps_saved_upload(self):
+        from forge411 import session as S
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "session.pkl"
+            p.write_bytes(b"upload en cours")
+            self.assertFalse(S.save(S.Session(), p))      # démarrage de l'app : session vide
+            self.assertTrue(p.exists())
+
+
+class GenreMatchTests(unittest.TestCase):
+    def test_fiction_is_not_science_fiction(self):
+        from forge411.profiles.base import pick_fuzzy
+        t = OptionType(id=7, name="Genre Ebook", multiple=True, required=False,
+                       values=[{"id": 1, "value": "Science-Fiction"}, {"id": 2, "value": "Hip-Hop/Rap"},
+                               {"id": 3, "value": "Electro"}, {"id": 4, "value": "Roman"}])
+        out = {}
+        pick_fuzzy([t], out, "Genre Ebook", ["Fiction", "Hip Hop", "Electronic", "History"])
+        self.assertEqual(out.get(7), [2, 3])
+
+
+class GogDetectionTests(unittest.TestCase):
+    def test_gog_installer_is_a_game(self):
+        root = Path("/x/Celeste.v1.4.0.0-GOG")
+        fl = [root / "setup_celeste_1.4.0.0.exe", root / "setup_celeste_1.4.0.0-1.bin"]
+        src = Source(path=root, is_dir=True, files=fl, total_size=8_000_000)
+        self.assertEqual(detect(src)[0][1].key, "game")
+        from forge411.profiles.software import analyze
+        self.assertTrue(analyze(src).gog)
+
+
+class XxxDatedNameTests(unittest.TestCase):
+    def test_studio_date_title_without_team(self):
+        from forge411.profiles.xxx import XxxAnalysis, XxxProfile
+        f = Path("/x/[Vixen] 2024-03-15 Test Scene Name.mp4")
+        src = Source(path=f, is_dir=False, files=[f], total_size=1)
+        va = VideoAnalysis(videos=[MediaFile(path=f)], parsed=parse_release_name(f.name))
+        ctx = Ctx(src=src, analysis=XxxAnalysis(kind="video", video=va))
+        parts = {p.key: p.value for p in XxxProfile().parts(ctx)}
+        self.assertEqual(parts["title"], "Test.Scene.Name")
+        self.assertEqual(parts["date"], "2024.03.15")
+        self.assertNotIn(parts["team"], ("15", "Name"))
+
+
+class MiscNamingTests(unittest.TestCase):
+    def test_gps_keeps_year_dot_version(self):
+        from forge411.profiles.misc import GpsProfile
+        r = Path("/x/Garmin.City.Navigator.Europe.NT.2025.10")
+        src = Source(path=r, is_dir=True, files=[r / "gmapsupp.img"], total_size=1)
+        p = GpsProfile()
+        parts = {x.key: x.value for x in p.parts(Ctx(src=src, analysis=p.analyze(src)))}
+        self.assertEqual(parts["year"], "2025.10")
+
+    def test_print3d_name_does_not_repeat_format(self):
+        from forge411.profiles.misc import PrintProfile
+        r = Path("/x/Articulated.Dragon.STL.Pack")
+        src = Source(path=r, is_dir=True, files=[r / "a.stl", r / "b.stl"], total_size=1)
+        p = PrintProfile()
+        parts = {x.key: x.value for x in p.parts(Ctx(src=src, analysis=p.analyze(src)))}
+        self.assertEqual(p.build(parts), "Articulated.Dragon[STL]")
+
+    def test_music_tags_row_keeps_parenthesis(self):
+        from forge411.profiles.music import MusicProfile
+        a = AudioAnalysis(tracks=[Track(rel=f"0{i}.flac", artist="Daft Punk", album="Discovery", date="2001")
+                                  for i in (1, 2)])
+        rows = dict(MusicProfile().summary(Ctx(src=None, analysis=a)))
+        self.assertEqual(rows["Tags"], "Daft Punk - Discovery (2001)")
+
+
+class HistoryTests(unittest.TestCase):
+    def test_remove_entries_and_orphan_snapshots(self):
+        import json
+        from forge411 import config as C
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            snap = d / "a.pkl"
+            snap.write_bytes(b"x")
+            a = {"date": "2026-01-01 10:00", "name": "A", "snapshot": str(snap)}
+            b = {"date": "2026-01-02 10:00", "name": "B"}
+            old, C.HISTORY_PATH = C.HISTORY_PATH, d / "history.jsonl"
+            try:
+                C.HISTORY_PATH.write_text("".join(json.dumps(x) + "\n" for x in (a, b)), encoding="utf-8")
+                self.assertEqual(C.remove_history([a]), 1)
+                self.assertEqual(C.read_history(), [b])
+                self.assertFalse(snap.exists())
+            finally:
+                C.HISTORY_PATH = old
 
 
 class ScreensTests(unittest.TestCase):

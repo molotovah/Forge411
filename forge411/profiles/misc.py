@@ -91,7 +91,7 @@ class _InvProfile(Profile):
 class EmulationProfile(_InvProfile):
     key = "emulation"
     label = "Émulation"
-    icon = "🕹️"
+    icon = "🕹"
     category_id = 6
     subcategories = {38: "ROM/ISO", 37: "Émulateur"}
     dotted = False
@@ -176,6 +176,9 @@ class GpsProfile(_InvProfile):
         words = re.split(r"[._\s]+", re.sub(r"-[A-Za-z0-9]+$", "", ctx.src.stem))
         brand = next((w for w in words if w.lower() in ("garmin", "tomtom", "navionics", "igo", "sygic")), "")
         year = next((w for w in words if re.fullmatch(r"20\d\d(\.\d+)?", w)), "")
+        m = re.search(r"(?:^|[._\s])(20\d\d)[._](\d{1,2})(?=$|[._\s-])", ctx.src.stem)
+        if m and m.group(1) == year:                   # NT.2025.10 : version 2025.10, pas 2025
+            year = f"{m.group(1)}.{m.group(2)}"
         zone = " ".join(w for w in words if w not in (brand, year) and not re.fullmatch(r"img|gmap|v?\d+(\.\d+)*", w, re.I))
         support = next((e.lstrip(".").upper() for e in (".img", ".gmap", ".obf", ".kmz", ".apk", ".exe")
                         if ctx.src.by_ext(e)), "")
@@ -243,6 +246,8 @@ class PrintProfile(_InvProfile):
         fmts = "".join(f"[{e.lstrip('.').upper()}]" for e, _ in sorted(inv.counts.items(), key=lambda x: -x[1])
                        if e in PRINT_OK)
         name = re.sub(r"[._]+", " ", re.sub(r"(\[.*?\])|-[A-Za-z0-9]+$", "", ctx.src.stem))
+        # formats et « pack » déjà portés par les crochets : Dragon.STL.Pack → Dragon[STL]
+        name = re.sub(r"\b(stl|3mf|obj|step|stp|lys|chitubox|pack|files?|models?)\b", " ", name, flags=re.I).strip() or name
         pack = len(ctx.src.by_ext(*PRINT_OK)) > 1 and ctx.src.is_dir and \
             len({f.parent for f in ctx.src.by_ext(*PRINT_OK)}) > 1
         return [Part("pack", "Pack", "[PACK]" if pack else "", choices=["", "[PACK]"], width=8,

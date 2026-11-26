@@ -60,23 +60,39 @@ def slot_resolution(slot: str) -> str:
 @dataclass
 class Verdict:
     exact: list = field(default_factory=list)       # même nom : doublon
+    same_version: list = field(default_factory=list)  # même nom à la team près : doublon probable
     same_slot: list = field(default_factory=list)   # même profil et résolution : slot probablement occupé
     others: list = field(default_factory=list)
     family: str = ""
 
     @property
     def needs_justification(self) -> bool:
-        return bool(self.same_slot) and not self.exact
+        return bool(self.same_slot) and not self.exact and not self.same_version
+
+
+def _words(text: str) -> set:
+    return {w for w in re.split(r"[^a-z0-9]+", text.lower()) if len(w) >= 3 or w.isdigit()}
+
+
+def relevant(releases: list, title: str) -> list:
+    """Releases dont le nom contient tous les mots du titre cherché : la recherche texte de C411 renvoie
+    aussi des résultats sans rapport (« Harry Potter » pour un album de Daft Punk)."""
+    want = _words(title)
+    return [r for r in releases if want <= _words(r.name)] if want else releases
 
 
 def compare(name: str, releases: list) -> Verdict:
     """Classe les releases existantes par rapport au nom préparé."""
     v = Verdict(family=family(name))
     norm = lambda n: re.sub(r"[^a-z0-9]", "", n.lower())
+    untag = lambda n: norm(n.rsplit("-", 1)[0]) if "-" in n else norm(n)
     me, res, sp = norm(name), resolution(name), special(name)
     for r in releases:
         if norm(r.name) == me:
             v.exact.append(r)
+            continue
+        if untag(r.name) == untag(name):
+            v.same_version.append(r)
             continue
         if special(r.name) != sp:              # versions spéciales : jeu de slots indépendant
             v.others.append(r)

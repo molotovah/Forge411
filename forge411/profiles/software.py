@@ -27,6 +27,10 @@ CONSOLE_OPTION = {"Switch": "Switch", "DS": "DS", "3DS": "3DS", "Wii": "Wii", "G
 INSTALLER_EXT = {".msi", ".dmg", ".pkg", ".deb", ".rpm", ".apk", ".xapk", ".ipa", ".appimage"}
 OS_LIST = ["Windows", "macOS", "Linux", "Android", "iOS"]
 LANG_LIST = ["MULTI", "FR", "EN"]
+# Genres RAWG (anglais) → libellés C411 ; les autres passent tels quels (Action, Simulation, Sport…)
+RAWG_GENRES = {"platformer": "Plates-formes", "adventure": "Aventure", "rpg": "Jeu de rôle", "strategy": "Stratégie",
+               "shooter": "FPS", "puzzle": "Puzzle-game", "racing": "Course", "sports": "Sport",
+               "fighting": "Combat", "educational": "Éducatif", "massively multiplayer": "MMO"}
 GAME_MODES = ["Nom d'origine (scène / repack)", "Portable", "GOG", "DRM Free", "Console"]
 
 
@@ -74,8 +78,9 @@ def analyze(src, progress=None) -> SoftAnalysis:
     s.setup = any(re.search(r"(setup|install(er)?|inst)[^/]*\.exe$", base(r)) for r in rels)
     s.installer = s.setup or any(r.endswith(tuple(INSTALLER_EXT)) for r in rels)
     s.steam_api = any(re.search(r"steam_api(64)?\.dll|steamrip|goldberg|preactivated", base(r)) for r in rels)
-    s.gog = any("goggame-" in base(r) or "gog" in base(r).split(".")[0] for r in rels)
     stem = src.stem
+    s.gog = any("goggame-" in base(r) or "gog" in base(r).split(".")[0] for r in rels) or \
+        bool(re.search(r"(-|\[|\()gog(\]|\))?$|\[gog\]", stem, re.I))       # Jeu.v1.0-GOG, Jeu [GOG]
     s.portable_word = "portable" in stem.lower()
     s.preactivated_word = "preactivated" in stem.lower() or "pre-activated" in stem.lower()
     for tag in TRUSTED_GAME_TAGS:
@@ -159,10 +164,11 @@ _NOISE = r"(portable|setup|installer|repack|multi\d*|x64|x86|win(dows)?(64|32)?|
 
 
 def _clean_title(stem: str) -> str:
-    """'VLC media player 3.0.21 Windows x64' → 'VLC media player' ; 'Hades.v1.38-GOG' → 'Hades'."""
+    """'VLC media player 3.0.21 Windows x64' → 'VLC media player' ; 'Hades.v1.38-GOG' → 'Hades' ;
+    '7-Zip.24.08.x64' → '7-Zip'."""
     t = re.sub(r"[\[(].*?[\])]", " ", stem)
+    t = re.sub(r"-\w+$", "", t.strip())          # team en fin de nom, avant de couper la version (7-Zip)
     t = re.sub(r"(?:^|[ ._-])v?\d+(?:\.\d+){1,3}[a-z]?(?=$|[ ._-]).*$", "", t, flags=re.I)  # version et suite
-    t = re.sub(r"-\w+$", "", t)
     if " " not in t.strip():                      # nom pointé : les points séparent les mots
         t = t.replace(".", " ").replace("_", " ")
     t = re.sub(rf"\b{_NOISE}\b", " ", t, flags=re.I)
@@ -262,6 +268,10 @@ class GameProfile(_SoftBase):
             sc = max(sc, 0.85)
         if re.search(r"\b(game|jeu|repack|gog)\b", src.stem, re.I):
             sc = max(sc, 0.6)
+        # GOG ne distribue que des jeux : « -GOG », « [GOG] » ou installateur setup_<jeu>_<version>.exe + .bin
+        if re.search(r"(-|\[|\()gog(\]|\))?$|\[gog\]", src.stem, re.I) or \
+                re.search(r"(^|/)setup_[^/]+_[\d.]+(\(\d+\))?(-\d+)?\.(exe|bin)\b", s_names):
+            sc = max(sc, 0.8)
         if src.by_ext(".exe") and src.total_size > 4 * 1024 ** 3:
             sc = max(sc, 0.55)
         return sc
@@ -380,7 +390,8 @@ class GameProfile(_SoftBase):
         lang = ctx.parts.get("lang", "FR")
         pick(types, out, "Langue", {"FR": "Français (VFF/TrueFrench)", "MULTI-FR": "Multi (Français inclus)",
                                     "MULTI": "Multi (Français inclus)", "EN": "Anglais"}.get(lang, "Anglais"))
-        pick_fuzzy(types, out, "Genre Jeux", ctx.ident.genres if ctx.ident else [])
+        genres = [RAWG_GENRES.get(g.lower(), g) for g in (ctx.ident.genres if ctx.ident else [])]
+        pick_fuzzy(types, out, "Genre Jeux", genres)
         c = CONSOLE_OPTION.get(s.console or ctx.parts.get("os", ""), "")
         for t in ("Console Nintendo", "Console Sony", "Console Microsoft"):
             pick(types, out, t, c)
@@ -429,7 +440,7 @@ class AppProfile(_SoftBase):
 
     def parts(self, ctx):
         s = ctx.analysis
-        title = _clean_title(ctx.src.stem)
+        title = clean_free(ctx.ident.title) if ctx.ident and ctx.ident.title else _clean_title(ctx.src.stem)
         mobile = s.os in ("Android", "iOS")
         ext = next((e.upper().lstrip(".") for e in (".apk", ".xapk", ".ipa") if any(n.endswith(e) for n in s.names)), "")
         stem = ctx.src.stem.lower()

@@ -186,7 +186,8 @@ def apply(root: tk.Tk):
 
     s.configure("Horizontal.TProgressbar", troughcolor=SURFACE2, background=ACCENT,
                 bordercolor=SURFACE2, lightcolor=ACCENT, darkcolor=ACCENT, thickness=8)
-    s.configure("Vertical.TScrollbar", background=SURFACE2, troughcolor=BG,
-                bordercolor=BG, arrowcolor=MUTED, lightcolor=SURFACE2, darkcolor=SURFACE2,
-                gripcount=0, arrowsize=12)
-    s.map("Vertical.TScrollbar", background=[("active", HOVER)])
+    for orient in ("Vertical", "Horizontal"):     # l'horizontale (NFO, tableaux) restait claire sinon
+        s.configure(f"{orient}.TScrollbar", background=SURFACE2, troughcolor=BG,
+                    bordercolor=BG, arrowcolor=MUTED, lightcolor=SURFACE2, darkcolor=SURFACE2,
+                    gripcount=0, arrowsize=12)
+        s.map(f"{orient}.TScrollbar", background=[("active", HOVER)])

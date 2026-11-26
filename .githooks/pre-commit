@@ -1,0 +1,15 @@
+#!/bin/sh
+# Avant chaque commit : tous les tests (unitaires, bout en bout, règles d'interface) et ruff (erreurs).
+# Activation, une fois par clone : git config core.hooksPath .githooks
+PY=$(command -v python3 || command -v python)
+if ! out=$("$PY" -m unittest discover -q -s tests -t . 2>&1); then
+  printf '%s\n' "$out" | tail -n 25
+  echo "pre-commit : des tests échouent, commit refusé." >&2
+  exit 1
+fi
+if command -v ruff >/dev/null 2>&1; then R="ruff"; elif command -v uvx >/dev/null 2>&1; then R="uvx ruff"; else R=""; fi
+if [ -n "$R" ]; then
+  $R check --select F forge411 tests tools -q || { echo "pre-commit : ruff signale des erreurs." >&2; exit 1; }
+else
+  echo "pre-commit : ruff absent, vérification statique sautée." >&2
+fi

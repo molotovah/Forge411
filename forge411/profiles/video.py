@@ -77,8 +77,10 @@ def detect_platform(raw: str) -> str:
 
 def detect_team(raw: str, parsed_team) -> str:
     """Tag de team : après le dernier tiret, sinon dernier mot non technique."""
-    if parsed_team and parsed_team.lower() not in ("dl",):
+    if parsed_team and parsed_team.lower() not in ("dl",) and not parsed_team.isdigit():   # « 2024-03-15 » : pas une team
         return re.sub(r"[^A-Za-z0-9]", "", parsed_team)
+    if " " in raw.strip():         # nom libre avec espaces : le dernier mot appartient au titre, pas à une team
+        return ""
     last = re.split(r"[.\s_]+", raw.strip())[-1] if raw.strip() else ""
     if (last and last.isalnum() and last.lower() not in _KNOWN
             and not re.fullmatch(r"(19|20)\d{2}|S\d+E?\d*|\d+(\.\d)?", last, re.I)):
@@ -315,7 +317,7 @@ class VideoProfile(Profile):
             c.errors.append("Source WEB avec x264/x265 : la plateforme VOD est obligatoire (sinon requalifié WEBRip). "
                             "Si tu as ré-encodé toi-même, la source est WEBRip.")
         mf = va.main
-        if mf is not None and vi.MEDIAINFO_OK and mf.video:
+        if mf is not None and mf.video:         # données d'analyse présentes (sans MediaInfo, video reste vide)
             lib = mf.video.library.lower()
             if any(g in lib for g in GPU_ENCODERS):
                 c.errors.append("Encodage GPU (NVENC, QSV, AMF) interdit sur C411.")

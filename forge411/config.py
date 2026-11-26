@@ -138,6 +138,11 @@ class Config:
         return self._sub("torrents")
 
     @property
+    def captures_dir(self) -> Path:
+        """Captures extraites, une sous-dossier par release (créé à la demande)."""
+        return Path(self.get("output_dir") or DEFAULTS["output_dir"]) / "captures"
+
+    @property
     def nfo_dir(self) -> Path:
         return self._sub("nfo")
 
@@ -176,3 +181,52 @@ def read_history() -> list:
         except ValueError:
             continue
     return list(reversed(out))
+
+
+def remove_history(entries: list) -> int:
+    """Retire ces entrées de l'historique (comparées par contenu) et supprime les copies d'upload (.pkl) qui ne
+    servent plus à aucune entrée restante. Les .torrent ne sont jamais touchés. Renvoie le nombre retiré."""
+    if not HISTORY_PATH.exists() or not entries:
+        return 0
+    drop = [json.dumps(e, ensure_ascii=False, sort_keys=True) for e in entries]
+    kept, removed, snaps = [], [], set()
+    for line in HISTORY_PATH.read_text(encoding="utf-8").splitlines():
+        try:
+            key = json.dumps(json.loads(line), ensure_ascii=False, sort_keys=True)
+        except ValueError:
+            kept.append(line)
+            continue
+        if key in drop:
+            drop.remove(key)
+            removed.append(json.loads(line))
+        else:
+            kept.append(line)
+            snaps.add(json.loads(line).get("snapshot", ""))
+    tmp = HISTORY_PATH.with_suffix(".tmp")
+    tmp.write_text("".join(x + "\n" for x in kept), encoding="utf-8")
+    tmp.replace(HISTORY_PATH)
+    for e in removed:
+        snap = e.get("snapshot", "")
+        if snap and snap not in snaps:
+            try:
+                Path(snap).unlink()
+            except OSError:
+                pass
+    return len(removed)
+
+
+def remove_captures(cfg: "Config", *dirs) -> int:
+    """Supprime des dossiers de captures devenus inutiles (images hébergées, liens dans la présentation publiée).
+    Ne touche qu'aux sous-dossiers directs du dossier des captures. Renvoie le nombre supprimé."""
+    import shutil
+    root = cfg.captures_dir
+    n = 0
+    for d in {Path(x) for x in dirs if x}:
+        try:
+            if d.parent.resolve() != root.resolve() or not d.is_dir():
+                continue
+            shutil.rmtree(d)
+            n += 1
+        except OSError:
+            continue
+    return n

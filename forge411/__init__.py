@@ -4,7 +4,7 @@ Copyright (C) 2026 molotovah. Logiciel libre sous GNU GPL version 3 : voir LICEN
 (conditions supplémentaires de l'article 7 : mention d'auteur à conserver dans l'interface).
 """
 
-__version__ = "2.1.5"
+__version__ = "2.1.6"
 APP_NAME = "Forge411"
 AUTHOR = "molotovah"
 AUTHOR_URL = "https://github.com/molotovah"

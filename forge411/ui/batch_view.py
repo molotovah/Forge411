@@ -10,7 +10,7 @@ from .. import batch as B
 from .. import clients as CL
 from . import theme as T
 from .dialogs import Dialog
-from .widgets import UI, Btn, IssueList, label, run_bg
+from .widgets import UI, Btn, IssueList, label, run_bg, style_tree
 
 TONES = {B.READY: "ok", B.SENT: "ok", B.CHECK: "warning", B.ERROR: "error", B.PENDING: "info"}
 
@@ -32,7 +32,7 @@ class BatchDialog(Dialog):
         cols = ("status", "type", "name")
         self.tree = ttk.Treeview(mid, columns=cols, show="headings", selectmode="extended", height=14)
         for c, title, w in (("status", "État", 100), ("type", "Type", 230), ("name", "Nom de release", 650)):
-            self.tree.heading(c, text=title)
+            self.tree.heading(c, text=title, anchor="w")
             self.tree.column(c, width=w, stretch=c == "name")
         sb = ttk.Scrollbar(mid, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=sb.set)
@@ -43,11 +43,7 @@ class BatchDialog(Dialog):
             self.tree.tag_configure(st, foreground=color)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.show_messages())
         self.tree.bind("<Double-1>", lambda e: self.open_in_wizard())
-        s = ttk.Style(self)
-        s.configure("Treeview", background=T.SURFACE, fieldbackground=T.SURFACE, foreground=T.TEXT, rowheight=26,
-                    bordercolor=T.BORDER)
-        s.configure("Treeview.Heading", background=T.SURFACE2, foreground=T.MUTED, relief="flat")
-        s.map("Treeview", background=[("selected", T.ACCENT_SOFT)], foreground=[("selected", T.TEXT)])
+        style_tree(self)
 
         self.msgs = IssueList(self)
         self.msgs.configure(bg=T.BG)
@@ -70,7 +66,7 @@ class BatchDialog(Dialog):
                                     initialdir=self.app.cfg.get("last_dir") or None)
         if not p:
             return
-        self.folder_lbl.configure(text=p, fg=T.TEXT)
+        self.folder_lbl.configure(text=str(Path(p)), fg=T.TEXT)
         self.items = B.candidates(Path(p))
         self.tree.delete(*self.tree.get_children())
         for i, it in enumerate(self.items):
@@ -177,7 +173,9 @@ class BatchDialog(Dialog):
         it = self._selected()
         if not it:
             return
-        msgs = it.messages or [("info", "Pas encore traité.")]
+        empty = {B.READY: ("ok", "Rien à signaler : prêt à être envoyé en brouillon."),
+                 B.PENDING: ("info", "Pas encore analysé.")}.get(it.status, ("info", "Aucun détail."))
+        msgs = it.messages or [empty]
         self.msgs.show(msgs[:8], wrap=980)
         if it.url:
             self.msgs.show(msgs[:7] + [("ok", f"Brouillon : {it.url}")], wrap=980)

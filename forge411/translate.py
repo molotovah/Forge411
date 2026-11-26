@@ -120,6 +120,8 @@ def french_overview(ident, enabled: bool = True):
     Les noms des interprètes et du studio ne sont pas traduits (Amber, Blue, White…)."""
     if not enabled or ident is None or not (ident.overview or "").strip():
         return ident
+    if ident.provider == "musicbrainz":     # « résumé » = liste des pistes : des titres, jamais traduits
+        return ident
     raw = ident.raw or {}
     names = list(raw.get("performers") or []) + [raw.get("site") or ""]
     names += [p.strip() for _, v in (ident.people or []) for p in str(v).split(",")]

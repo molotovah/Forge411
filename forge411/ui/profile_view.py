@@ -31,7 +31,7 @@ class ProfileDialog(Dialog):
         self.stamp = label(bar, "", fg=T.FAINT, font=T.F_SMALL)
         self.stamp.pack(side="left")
         Btn(bar, "Fermer", self.destroy, kind="ghost").pack(side="right")
-        self.refresh_btn = Btn(bar, "⟳  Actualiser", lambda: self.load(force=True))
+        self.refresh_btn = Btn(bar, "Actualiser", lambda: self.load(force=True))
         self.refresh_btn.pack(side="right", padx=(0, 8))
         Tooltip(self.refresh_btn, "C411 rafraîchit le profil au plus toutes les 30 secondes.")
         self.load()
@@ -39,22 +39,33 @@ class ProfileDialog(Dialog):
     # ── Chargement ────────────────────────────────────────────────────────
     def load(self, force: bool = False):
         cached = self.app.profile_cache
-        if cached and (not force or time.time() - cached[1] < P.MIN_REFRESH):
+        if cached and not force:
             self._show(*cached)
-            if force:
-                self.stamp.configure(text=f"Déjà à jour (C411 rafraîchit toutes les {P.MIN_REFRESH} s).")
             return
-        self._message("Chargement du profil…")
+        if cached and time.time() - cached[1] < P.MIN_REFRESH:
+            wait = int(P.MIN_REFRESH - (time.time() - cached[1])) + 1
+            self.stamp.configure(text=f"Déjà à jour : C411 recalcule le profil toutes les {P.MIN_REFRESH} s "
+                                      f"(réessaie dans {wait} s).", fg=T.WARNING)
+            return
+        if cached:                       # garde l'affichage, signale seulement le chargement
+            self.stamp.configure(text="Actualisation…", fg=T.MUTED)
+        else:
+            self._message("Chargement du profil…")
         self.refresh_btn.set_enabled(False)
+        self.refresh_btn.set_text("Actualisation…")
+        before = cached[0] if cached else None
 
         def ok(prof):
             self.app.set_profile(prof)
             if self.winfo_exists():
                 self._show(*self.app.profile_cache)
+                if before is not None and _same(before, prof):
+                    self.stamp.configure(text=self.stamp.cget("text") + " · aucune variation depuis la dernière lecture")
 
         def err(e):
             if self.winfo_exists():
                 self.refresh_btn.set_enabled(True)
+                self.refresh_btn.set_text("Actualiser")
                 self._error(str(e))
         run_bg(lambda: P.parse(self.app.c411().profile(), BASE), ok, err)
 
@@ -98,7 +109,8 @@ class ProfileDialog(Dialog):
     def _show(self, p: P.Profile, at: float):
         self._clear()
         self.refresh_btn.set_enabled(True)
-        self.stamp.configure(text="Mis à jour à " + time.strftime("%H:%M:%S", time.localtime(at)))
+        self.refresh_btn.set_text("Actualiser")
+        self.stamp.configure(text="Mis à jour à " + time.strftime("%H:%M:%S", time.localtime(at)), fg=T.FAINT)
         self._header(p)
         self._tiles(p)
         self._trend(p, at)
@@ -252,3 +264,9 @@ class ProfileDialog(Dialog):
                   font=T.F_SMALL_B).pack(side="left")
             label(head, f"{v.done} / {v.total}" if v.total else "aucune quête", fg=T.MUTED, font=T.F_SMALL).pack(side="right")
             Meter(cell, v.done / v.total if v.total else 0, colors.get(v.key, T.ACCENT), height=6).pack(fill="x", pady=(5, 0))
+
+
+def _same(a, b) -> bool:
+    """Mêmes chiffres principaux (C411 n'a rien recalculé entre les deux lectures)."""
+    keys = ("ratio", "up_total", "down_actual", "level", "xp", "zen")
+    return all(getattr(a, k, None) == getattr(b, k, None) for k in keys)

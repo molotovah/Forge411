@@ -65,7 +65,7 @@ class MusicProfile(Profile):
         a = ctx.analysis
         rows = [("Pistes", str(len(a.tracks))), ("Durée", fmt_duration(int(a.duration * 1000)))]
         if a.artist or a.album:
-            rows.append(("Tags", f"{a.artist} - {a.album} ({a.year})".strip(" -()")))
+            rows.append(("Tags", " - ".join(x for x in (a.artist, a.album) if x) + (f" ({a.year})" if a.year else "")))
         rows.append(("Qualité", self._quality(a)))
         cover = f"{a.cover} ({a.cover_size[0]}×{a.cover_size[1]})" if a.cover and a.cover_size[0] else a.cover
         extras = [x for x, ok in (("cue", a.has_cue), ("log", a.has_log), (cover, bool(a.cover))) if ok]

@@ -8,7 +8,7 @@ from ..api import BASE
 from ..batch import MAX_DRAFTS
 from . import theme as T
 from .dialogs import Dialog
-from .widgets import Btn, Card, Meter, ScrollFrame, autowrap, label, run_bg
+from .widgets import Btn, Card, Meter, ScrollFrame, autowrap, label, run_bg, wrap_name
 
 UPLOAD_URL = f"{BASE}/upload"
 
@@ -30,7 +30,9 @@ class DraftsDialog(Dialog):
         self.count = label(head, "", font=T.F_H2)
         self.count.pack(side="left")
         Btn(head, "Ouvrir la page d'upload  ↗", lambda: webbrowser.open(UPLOAD_URL), small=True).pack(side="right")
-        Btn(head, "⟳", self.load, small=True, kind="ghost").pack(side="right", padx=(0, 6))
+        # Texte plutôt que « ⟳ » : ce glyphe manque dans Segoe UI et s'affichait décalé (police de secours)
+        self.refresh_btn = Btn(head, "Actualiser", self.load, small=True)
+        self.refresh_btn.pack(side="right", padx=(0, 8))
         self.meter = Meter(self, 0, T.ACCENT, height=6, track=T.SURFACE2)
         self.meter.configure(bg=T.BG)
         self.meter.pack(fill="x", padx=20)
@@ -45,6 +47,7 @@ class DraftsDialog(Dialog):
         for w in self.sf.inner.winfo_children():
             w.destroy()
         label(self.sf.inner, "Chargement…", fg=T.MUTED).pack(fill="x")
+        self.refresh_btn.set_enabled(False)
         try:
             api = self.app.c411()
         except Exception as e:
@@ -55,6 +58,7 @@ class DraftsDialog(Dialog):
     def _show_error(self, text):
         if not self.winfo_exists():
             return
+        self.refresh_btn.set_enabled(True)
         for w in self.sf.inner.winfo_children():
             w.destroy()
         autowrap(label(self.sf.inner, text, fg=T.ERROR)).pack(fill="x")
@@ -62,6 +66,7 @@ class DraftsDialog(Dialog):
     def _show(self, drafts):
         if not self.winfo_exists():
             return
+        self.refresh_btn.set_enabled(True)
         for w in self.sf.inner.winfo_children():
             w.destroy()
         n = len(drafts)
@@ -84,7 +89,7 @@ class DraftsDialog(Dialog):
             top = tk.Frame(card.body, bg=T.SURFACE)
             top.pack(fill="x")
             title = _field(d, "name", "title", "torrentName", default="(sans titre)")
-            autowrap(label(top, title, font=T.F_UI_B)).pack(side="left", fill="x", expand=True)
+            wrap_name(label(top, "", font=T.F_UI_B), title).pack(side="left", fill="x", expand=True)
             Btn(top, "Supprimer", lambda dd=d: self.delete(dd), kind="danger", small=True).pack(side="right")
             sub = cats.get(_field(d, "subcategoryId", default=0), "")
             when = str(_field(d, "updatedAt", "createdAt"))[:16].replace("T", " ")

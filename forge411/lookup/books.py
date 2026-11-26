@@ -14,6 +14,13 @@ def _text(v) -> str:
     return re.sub(r"<[^>]+>", "", v or "").strip()
 
 
+def _close(a: str, b: str) -> bool:
+    """Titres proches : au moins la moitié des mots significatifs de b se retrouvent dans a."""
+    words = lambda t: {w for w in re.split(r"[^\w]+", t.lower()) if len(w) > 2}
+    wb = words(b)
+    return not wb or len(words(a) & wb) * 2 >= len(wb)
+
+
 class Books:
     key = "books"
     label = "Open Library"
@@ -31,17 +38,23 @@ class Books:
 
     # ── Recherche ─────────────────────────────────────────────────────────
     def search(self, query: str, year: str = "", author: str = "", isbn: str = "") -> list:
+        out = self._find(query, author, isbn)
+        if isbn and query and not any(_close(m.title, query) for m in out):
+            # ISBN erroné ou réattribué dans les métadonnées : le titre fait foi, l'ISBN passe après
+            seen = {m.id for m in out}
+            out = [m for m in self._find(query, author, "") if m.id not in seen] + out
+        if year:
+            out.sort(key=lambda m: m.year != year)
+        return out
+
+    def _find(self, query, author, isbn) -> list:
         out = []
         if self.g:
             try:
                 out = self._search_google(query, author, isbn)
             except LookupFailed:
                 out = []
-        if not out:
-            out = self._search_ol(query, author, isbn)
-        if year:
-            out.sort(key=lambda m: m.year != year)
-        return out
+        return out or self._search_ol(query, author, isbn)
 
     def _search_ol(self, query, author, isbn):
         params = {"limit": 12, "fields": "key,title,author_name,first_publish_year,cover_i,isbn,subject,"

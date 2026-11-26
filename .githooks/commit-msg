@@ -1,0 +1,6 @@
+#!/bin/sh
+# Refuse toute mention de Claude/Anthropic dans un message de commit.
+if grep -qiE 'claude|anthropic|co-authored-by' "$1"; then
+  echo "commit-msg: mention Claude/Anthropic/Co-Authored-By interdite." >&2
+  exit 1
+fi

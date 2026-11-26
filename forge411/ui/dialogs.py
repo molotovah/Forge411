@@ -2,13 +2,15 @@
 
 import tkinter as tk
 import webbrowser
-from tkinter import filedialog, ttk
+from pathlib import Path
+from tkinter import filedialog, messagebox, ttk
 
 from .. import __version__, updater
 from ..api import C411
-from ..config import KEY_LINKS, Config, read_history
+from ..config import KEY_LINKS, Config, read_history, remove_history
 from . import theme as T
-from .widgets import UI, Btn, Card, Field, ScrollFrame, TextArea, Tooltip, autowrap, help_icon, label, link, run_bg
+from .widgets import (UI, Btn, Field, ScrollFrame, TextArea, Tooltip, autowrap, help_icon, label, link, run_bg,
+                      style_tree, wrap_check)
 
 
 class Dialog(tk.Toplevel):
@@ -348,8 +350,7 @@ class SettingsDialog(Dialog):
         return msg
 
     def _check_row(self, parent, var, text, command=None):
-        ttk.Checkbutton(parent, text=text, variable=var, style="Card.TCheckbutton", command=command).pack(
-            fill="x", padx=16, pady=(4, 8))
+        wrap_check(parent, var, text, command).pack(fill="x", padx=16, pady=(4, 8))
 
     def _dir_row(self, parent, text, key, help_text, sub=""):
         cell = self._row(parent, text, help_text, sub)
@@ -635,34 +636,219 @@ class MultiSelectDialog(Dialog):
 # ═══════════════════════════════════════════════════════════════════════════
 
 class HistoryDialog(Dialog):
-    def _fix(self, entry):
-        app = self.master
-        self.destroy()
-        app.open_correction(entry)
+    """Historique des uploads : tableau triable et filtrable, sélection multiple, retrait des entrées
+    (une par une ou toutes celles dont le .torrent n'existe plus)."""
+
+    COLS = (("date", "Date", 130, False), ("name", "Release", 380, True), ("type", "Type", 150, False),
+            ("action", "Action", 130, False), ("state", "Torrent", 100, False))
+    FILTERS = ("Tout", "Publiés", "Brouillons", "Corrections", "Torrent introuvable")
 
     def __init__(self, parent):
-        super().__init__(parent, "Historique", 820, 560)
-        sf = ScrollFrame(self)
-        sf.pack(fill="both", expand=True, padx=20, pady=20)
-        items = read_history()
-        if not items:
-            label(sf.inner, "Aucun upload pour l'instant.", fg=T.MUTED).pack(fill="x")
-        for h in items:
-            card = Card(sf.inner, padding=12)
-            card.pack(fill="x", pady=(0, 8), padx=(0, 12))
-            top = tk.Frame(card.body, bg=T.SURFACE)
-            top.pack(fill="x")
-            label(top, h.get("name", "?"), font=T.F_UI_B, wraplength=600).pack(side="left", fill="x", expand=True)
-            label(top, " • ".join(x for x in (h.get("type", ""), h.get("action", ""), h.get("date", "")) if x), fg=T.MUTED,
-                  font=T.F_SMALL).pack(side="right")
-            if h.get("url"):
-                row = tk.Frame(card.body, bg=T.SURFACE)
-                row.pack(fill="x", pady=(4, 0))
-                link = label(row, h["url"], fg=T.ACCENT, font=T.F_SMALL, cursor="hand2")
-                link.pack(side="left", fill="x", expand=True)
-                link.bind("<Button-1>", lambda e, u=h["url"]: webbrowser.open(u))
-                if h.get("infohash") and h.get("action") != "Correction":
-                    Btn(row, "Corriger", lambda hh=h: self._fix(hh), small=True).pack(side="right")
+        super().__init__(parent, "Historique", 980, 600)
+        self.minsize(T.px(self, 760), T.px(self, 420))
+        self.app = parent
+        self.sort_col, self.sort_desc = "date", True
+
+        head = tk.Frame(self, bg=T.BG)
+        head.pack(fill="x", padx=20, pady=(18, 10))
+        title = tk.Frame(head, bg=T.BG)
+        title.pack(side="left")
+        label(title, "Historique", font=T.F_BIG).pack(anchor="w")
+        self.count = label(title, "", fg=T.MUTED, font=T.F_SMALL)
+        self.count.pack(anchor="w")
+        self.filter = tk.StringVar(value=self.FILTERS[0])
+        fc = ttk.Combobox(head, textvariable=self.filter, values=self.FILTERS, state="readonly", width=20)
+        fc.pack(side="right")
+        fc.bind("<<ComboboxSelected>>", lambda e: self.refresh())
+        self.query = tk.StringVar()
+        q = ttk.Entry(head, textvariable=self.query, width=28)
+        q.pack(side="right", padx=(0, 8))
+        Tooltip(q, "Filtrer par nom de release ou type.")
+        self.query.trace_add("write", lambda *_: self.refresh())
+        label(head, "Rechercher", fg=T.MUTED, font=T.F_SMALL).pack(side="right", padx=(0, 8))
+
+        mid = tk.Frame(self, bg=T.BORDER)          # liseré d'un pixel autour du tableau
+        mid.pack(fill="both", expand=True, padx=20)
+        inner = tk.Frame(mid, bg=T.SURFACE)
+        inner.pack(fill="both", expand=True, padx=1, pady=1)
+        style_tree(self)
+        self.tree = ttk.Treeview(inner, columns=[c[0] for c in self.COLS], show="headings", selectmode="extended")
+        for key, text, w, stretch in self.COLS:
+            self.tree.heading(key, text=text, anchor="w", command=lambda k=key: self.sort_by(k))
+            self.tree.column(key, width=T.px(self, w), minwidth=T.px(self, 60), stretch=stretch, anchor="w")
+        sb = ttk.Scrollbar(inner, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=sb.set)
+        self.tree.pack(side="left", fill="both", expand=True)
+        sb.pack(side="right", fill="y")
+        self.tree.tag_configure("missing", foreground=T.FAINT)
+        self.tree.bind("<<TreeviewSelect>>", lambda e: self._sel_changed())
+        self.tree.bind("<Double-1>", lambda e: self.open_url())
+        self.tree.bind("<Delete>", lambda e: self.remove_selected())
+        self.tree.bind("<Button-3>", self._menu)
+        self.empty = label(inner, "", fg=T.MUTED, bg=T.SURFACE)
+
+        self.sel_lbl = label(self, "", fg=T.MUTED, font=T.F_SMALL)      # nom complet de la ligne choisie
+        self.sel_lbl.pack(fill="x", padx=22, pady=(6, 0))
+        foot = tk.Frame(self, bg=T.BG)
+        foot.pack(fill="x", padx=20, pady=(8, 14))
+        self.clean_btn = Btn(foot, "", self.remove_missing, kind="ghost")
+        self.clean_btn.pack(side="left")
+        Tooltip(self.clean_btn, "Retire de l'historique les uploads dont le fichier .torrent a été supprimé ou déplacé.")
+        self.open_btn = Btn(foot, "Ouvrir sur C411  ↗", self.open_url, kind="primary")
+        self.open_btn.pack(side="right")
+        self.fix_btn = Btn(foot, "Corriger", self.fix)
+        self.fix_btn.pack(side="right", padx=(0, 8))
+        Tooltip(self.fix_btn, "Reprendre cet upload après un retour de la Team Pending.")
+        self.del_btn = Btn(foot, "Retirer", self.remove_selected, kind="danger")
+        self.del_btn.pack(side="right", padx=(0, 8))
+        Tooltip(self.del_btn, "Retire les lignes sélectionnées de l'historique (touche Suppr). "
+                              "Rien n'est supprimé sur C411 ni sur le disque.")
+        self.load()
+
+    # ── Données ───────────────────────────────────────────────────────────
+    def _torrent_exists(self, h) -> bool:
+        if h.get("torrent") and Path(h["torrent"]).exists():
+            return True
+        try:
+            return bool(h.get("name")) and (self.app.cfg.torrents_dir / f"{h['name']}.torrent").exists()
+        except Exception:
+            return False
+
+    def load(self):
+        self.items = read_history()
+        for h in self.items:
+            h["_ok"] = self._torrent_exists(h)
+        self.refresh()
+
+    def _visible(self):
+        q = self.query.get().strip().lower()
+        f = self.filter.get()
+        out = []
+        for h in self.items:
+            act = h.get("action", "")
+            if f == "Publiés" and ("Brouillon" in act or act == "Correction"):
+                continue
+            if f == "Brouillons" and "Brouillon" not in act:
+                continue
+            if f == "Corrections" and act != "Correction":
+                continue
+            if f == "Torrent introuvable" and h["_ok"]:
+                continue
+            if q and q not in f"{h.get('name', '')} {h.get('type', '')}".lower():
+                continue
+            out.append(h)
+        key = self.sort_col if self.sort_col != "state" else "_ok"
+        out.sort(key=lambda h: str(h.get(key, "")).lower(), reverse=self.sort_desc)
+        return out
+
+    def refresh(self):
+        self.tree.delete(*self.tree.get_children())
+        self.rows = {}
+        for h in self._visible():
+            iid = self.tree.insert("", "end", values=(h.get("date", ""), h.get("name", "?"), h.get("type", ""),
+                                                      h.get("action", ""), "Présent" if h["_ok"] else "Introuvable"),
+                                   tags=() if h["_ok"] else ("missing",))
+            self.rows[iid] = h
+        for key, text, *_ in self.COLS:
+            arrow = (" ▾" if self.sort_desc else " ▴") if key == self.sort_col else ""
+            self.tree.heading(key, text=text + arrow)
+        n, shown = len(self.items), len(self.rows)
+        missing = sum(1 for h in self.items if not h["_ok"])
+        self.count.configure(text=f"{n} upload{'s' if n > 1 else ''}" + (f" · {shown} affiché{'s' if shown > 1 else ''}"
+                                                                         if shown != n else ""))
+        if not self.rows:
+            self.empty.configure(text="Aucun upload pour l'instant." if not n else "Aucun résultat.")
+            self.empty.place(relx=0.5, rely=0.45, anchor="center")
+        else:
+            self.empty.place_forget()
+        self.clean_btn.set_text(f"Retirer les introuvables ({missing})")
+        self.clean_btn.set_enabled(missing > 0)
+        self._sel_changed()
+
+    def sort_by(self, col):
+        self.sort_desc = not self.sort_desc if col == self.sort_col else col == "date"
+        self.sort_col = col
+        self.refresh()
+
+    def _selected(self) -> list:
+        return [self.rows[i] for i in self.tree.selection() if i in self.rows]
+
+    def _sel_changed(self):
+        sel = self._selected()
+        one = sel[0] if len(sel) == 1 else None
+        self.open_btn.set_enabled(bool(one and one.get("url")))
+        self.fix_btn.set_enabled(bool(one and one.get("infohash") and one.get("action") != "Correction"))
+        self.del_btn.set_enabled(bool(sel))
+        self.del_btn.set_text(f"Retirer ({len(sel)})" if len(sel) > 1 else "Retirer")
+        if one:
+            where = one.get("torrent") or ""
+            self.sel_lbl.configure(text=one.get("name", "") + (f"   ·   {where}" if where else ""))
+        else:
+            self.sel_lbl.configure(text=f"{len(sel)} uploads sélectionnés" if sel else
+                                   "Double-clic : ouvrir sur C411 · Suppr : retirer · clic droit : plus d'actions")
+
+    # ── Actions ───────────────────────────────────────────────────────────
+    def open_url(self):
+        sel = self._selected()
+        if len(sel) == 1 and sel[0].get("url"):
+            webbrowser.open(sel[0]["url"])
+
+    def fix(self):
+        sel = self._selected()
+        if len(sel) == 1 and sel[0].get("infohash"):
+            entry = {k: v for k, v in sel[0].items() if not k.startswith("_")}
+            self.destroy()
+            self.app.open_correction(entry)
+
+    def _remove(self, entries, question):
+        if not entries or not messagebox.askyesno("Historique", question, parent=self):
+            return
+        remove_history([{k: v for k, v in h.items() if not k.startswith("_")} for h in entries])
+        self.load()
+
+    def remove_selected(self):
+        sel = self._selected()
+        what = f"« {sel[0].get('name', '?')} »" if len(sel) == 1 else f"ces {len(sel)} uploads"
+        self._remove(sel, f"Retirer {what} de l'historique ?\n\nRien n'est supprimé sur C411 ni sur le disque.")
+
+    def remove_missing(self):
+        gone = [h for h in self.items if not h["_ok"]]
+        n = len(gone)
+        self._remove(gone, f"Retirer {n} upload{'s' if n > 1 else ''} dont le fichier .torrent n'existe plus ?")
+
+    def _menu(self, e):
+        iid = self.tree.identify_row(e.y)
+        if not iid:
+            return
+        if iid not in self.tree.selection():
+            self.tree.selection_set(iid)
+        sel = self._selected()
+        m = tk.Menu(self, tearoff=0, bg=T.SURFACE2, fg=T.TEXT, activebackground=T.ACCENT_SOFT,
+                    activeforeground=T.TEXT, bd=0)
+        one = sel[0] if len(sel) == 1 else None
+        if one and one.get("url"):
+            m.add_command(label="Ouvrir sur C411", command=self.open_url)
+        if one:
+            m.add_command(label="Copier le nom", command=lambda: (self.clipboard_clear(),
+                                                                  self.clipboard_append(one.get("name", ""))))
+            t = Path(one["torrent"]) if one.get("torrent") else None
+            if t and t.exists():
+                m.add_command(label="Afficher le .torrent", command=lambda: _reveal(t))
+            if one.get("infohash") and one.get("action") != "Correction":
+                m.add_command(label="Corriger…", command=self.fix)
+            m.add_separator()
+        m.add_command(label="Retirer de l'historique", command=self.remove_selected)
+        m.tk_popup(e.x_root, e.y_root)
+
+
+def _reveal(path: Path):
+    """Ouvre l'explorateur sur le fichier (sélectionné sous Windows)."""
+    import subprocess
+    import sys
+    if sys.platform == "win32":
+        subprocess.Popen(["explorer", "/select,", str(path)])
+    else:
+        webbrowser.open(path.parent.as_uri())
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -857,7 +1043,7 @@ class UpdateDialog(Dialog):
     def _scan_started(self):
         if not self.winfo_exists():
             return
-        self._phase(0, "done", f"Fichier vérifié (SHA-256).")
+        self._phase(0, "done", "Fichier vérifié (SHA-256).")
         self._phase(1, "active", "Windows analyse le nouveau programme : cela peut prendre jusqu'à une minute.")
         bar = self.rows[1][3]
         bar.configure(mode="indeterminate")
