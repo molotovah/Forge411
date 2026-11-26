@@ -49,6 +49,9 @@ DEFAULTS = {
     # Dossier où le client torrent attend les données à seeder (optionnel)
     "seed_dir": "",
     "uploader_note": "",
+    # Uploader certifié sur C411 (15 torrents validés) : plusieurs uploads en attente de validation autorisés.
+    # Sinon Forge411 le déduit de l'historique (uploads validés constatés).
+    "uploader_certified": False,
     "window_geometry": "",
     "tour_done": False,
     # Mises à jour : vérification au démarrage, version ignorée par l'utilisateur
@@ -202,6 +205,22 @@ def update_history(infohash: str, **fields) -> int:
         tmp = HISTORY_PATH.with_suffix(".tmp")
         tmp.write_text("".join(x + "\n" for x in out), encoding="utf-8")
         tmp.replace(HISTORY_PATH)
+    return n
+
+
+def remove_nfos(cfg: "Config", *files) -> int:
+    """Supprime des NFO devenus inutiles (publiés avec le torrent validé). Ne touche qu'aux .nfo placés
+    directement dans le dossier des NFO de Forge411 (jamais ceux des sources). Renvoie le nombre supprimé."""
+    root = cfg.nfo_dir
+    n = 0
+    for f in {Path(x) for x in files if x}:
+        try:
+            if f.suffix.lower() != ".nfo" or f.parent.resolve() != root.resolve() or not f.is_file():
+                continue
+            f.unlink()
+            n += 1
+        except OSError:
+            continue
     return n
 
 

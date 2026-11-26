@@ -480,3 +480,32 @@ class Meter(tk.Canvas):
         v = max(0.0, min(1.0, self.value or 0.0))
         if v > 0:
             self._bar(0, max(self.h, w * v), self.color)
+
+
+class StatsPanel(tk.Frame):
+    """Rangée de tuiles « libellé / valeur » (vitesse, temps restant…) sous une barre de progression."""
+
+    def __init__(self, parent, fields: list[tuple[str, str]]):
+        super().__init__(parent, bg=parent.cget("bg"))
+        self.values: dict[str, tk.Label] = {}
+        for col, (key, caption) in enumerate(fields):
+            tile = tk.Frame(self, bg=T.SURFACE2)
+            tile.grid(row=0, column=col, sticky="nsew", padx=(0 if col == 0 else T.px(self, 8), 0))
+            self.columnconfigure(col, weight=1, uniform="tile")
+            pad = dict(padx=T.px(self, 12))
+            tk.Label(tile, text=caption.upper(), bg=T.SURFACE2, fg=T.FAINT, font=T.F_SMALL_B,
+                     anchor="w").pack(fill="x", pady=(T.px(self, 8), 0), **pad)
+            v = tk.Label(tile, text="…", bg=T.SURFACE2, fg=T.TEXT, font=T.F_H2, anchor="w")
+            v.pack(fill="x", pady=(0, T.px(self, 8)), **pad)
+            self.values[key] = v
+        self.note = tk.Label(self, text="", bg=self.cget("bg"), fg=T.MUTED, font=T.F_SMALL, anchor="w",
+                             justify="left")
+        self.note.grid(row=1, column=0, columnspan=len(fields), sticky="ew", pady=(T.px(self, 6), 0))
+
+    def set(self, key: str, text: str, color: str = None):
+        self.values[key].configure(text=text, fg=color or T.TEXT)
+
+    def reset(self):
+        for v in self.values.values():
+            v.configure(text="…", fg=T.TEXT)
+        self.note.configure(text="")

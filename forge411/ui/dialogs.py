@@ -64,6 +64,7 @@ class SettingsDialog(Dialog):
         self.client_remote = tk.BooleanVar(value=bool(cfg.get("client_path_local") or cfg.get("client_path_remote"))
                                            or not CL.is_local(cfg.get("client_url") or ""))
         self.client_auto = tk.BooleanVar(value=bool(cfg.get("client_auto", True)))
+        self.certified = tk.BooleanVar(value=bool(cfg.get("uploader_certified")))
         self.screens_host = tk.StringVar(value=SC.HOSTS.get(cfg.get("screens_host") or "pixhost", "pixhost.to"))
         self.screens_count = tk.StringVar(value=str(cfg.get("screens_count") or 4))
         self.theme = tk.StringVar(value=T.MODES.get(cfg.get("theme") or "dark", "Sombre"))
@@ -168,6 +169,16 @@ class SettingsDialog(Dialog):
                             highlightcolor=T.ACCENT)
         self.note.insert("1.0", cfg.get("uploader_note") or "")
         self.note.pack(fill="x", padx=16, pady=(4, 14))
+        from .. import moderation as MOD
+        g = self._group(pg, "Statut d'uploader")
+        hist = read_history()
+        n, waiting = MOD.approved_count(hist), len(MOD.waiting(hist))
+        autowrap(label(g, f"Tant que tu n'es pas uploader certifié ({MOD.CERTIFIED_AT} torrents validés), C411 "
+                          "n'accepte qu'un upload à la fois en attente de la Team Pending (modification demandée "
+                          f"comprise). Historique de Forge411 : {n} validé{'s' if n > 1 else ''}, {waiting} en "
+                          "attente.", fg=T.MUTED, font=T.F_SMALL)).pack(fill="x", padx=16, pady=(4, 0))
+        self._check_row(g, self.certified, "Je suis uploader certifié sur C411 (plusieurs uploads en attente "
+                                           "autorisés)")
 
         # ── Client torrent ────────────────────────────────────────────────────
         pg = self._page("client", "Client torrent", "Forge411 ajoute le torrent au client et attend le seed avant de "
@@ -586,6 +597,7 @@ class SettingsDialog(Dialog):
         from .. import screens as SC
         values["client_kind"] = next((k for k, v in CL.KINDS.items() if v == self.client_kind.get()), "")
         values["client_auto"] = self.client_auto.get()
+        values["uploader_certified"] = self.certified.get()
         if not self.client_remote.get():
             values["client_path_local"] = values["client_path_remote"] = ""
         values["screens_host"] = next((k for k, v in SC.HOSTS.items() if v == self.screens_host.get()), "pixhost")
@@ -879,9 +891,22 @@ class HistoryDialog(Dialog):
                 m.add_command(label="Afficher le .torrent", command=lambda: _reveal(t))
             if one.get("infohash") and one.get("action") != "Correction":
                 m.add_command(label="Corriger…", command=self.fix)
+            if one.get("infohash") and one["_c411"] in ("En attente", "À vérifier"):
+                m.add_command(label="Marquer comme refusé ou supprimé", command=lambda: self.mark_rejected(one))
             m.add_separator()
         m.add_command(label="Retirer de l'historique", command=self.remove_selected)
         m.tk_popup(e.x_root, e.y_root)
+
+
+    def mark_rejected(self, entry):
+        """L'API ne distingue pas un torrent refusé ou supprimé d'un torrent en attente : sans ce marquage, il
+        compterait toujours comme « en attente » (un seul autorisé pour un uploader non certifié)."""
+        if not messagebox.askyesno("Refusé ou supprimé", f"{entry.get('name', '')}\n\nCe torrent a été refusé ou "
+                                   "supprimé par C411 ? Il ne comptera plus comme upload en attente.", parent=self):
+            return
+        from ..config import update_history
+        update_history(entry["infohash"], c411_status="rejected")
+        self.load()
 
 
 def _reveal(path: Path):

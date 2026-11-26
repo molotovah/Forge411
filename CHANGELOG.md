@@ -2,6 +2,16 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [SemVer](https://semver.org/lang/fr/).
 
+## [2.2.0] - 2026-11-26
+
+### Ajouté
+- Publication : pendant le hachage du torrent et la vérification des données par le client torrent, des tuiles affichent la vitesse (sur les dernières secondes), le temps écoulé, le temps restant et l'avancement (pièces hachées, part vérifiée). À la fin : durée totale et vitesse moyenne.
+- Règle C411 des uploaders non certifiés (moins de 15 torrents validés) : un seul upload à la fois en attente de la Team Pending, modification demandée comprise. L'étape Publication signale l'upload déjà en attente et conseille le brouillon ; « Publier » demande alors confirmation. La notification de validation indique quand la place est libre. Statut déduit de l'historique, ou déclaré dans Paramètres › Uploads › Statut d'uploader.
+- Historique : clic droit « Marquer comme refusé ou supprimé » sur un upload en attente (l'API ne distingue pas un torrent refusé d'un torrent en attente).
+
+### Modifié
+- Le NFO d'une release est supprimé du dossier de sortie quand C411 a validé le torrent, comme ses captures. Les NFO des sources ne sont jamais touchés.
+
 ## [2.1.8] - 2026-11-26
 
 ### Modifié

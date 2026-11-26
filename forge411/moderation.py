@@ -18,6 +18,11 @@ PUBLISHED = ("Publication", "Correction")
 STALE_DAYS = 3                  # sans validation au-delà : « À vérifier sur le site »
 CHECK_EVERY = 30 * 60           # secondes entre deux vérifications automatiques
 LABELS = {"approved": "Validé", "rejected": "Refusé", "pending": "En attente"}
+# Règle C411 : tant que l'uploader n'est pas certifié (15 torrents validés), un seul upload à la fois en attente
+# de la Team Pending (« modification demandée » compte comme en attente). L'API ne donne ni le statut certifié ni
+# la liste des uploads en attente : Forge411 compte ceux de son historique, complété par un réglage manuel.
+CERTIFIED_AT = 15
+CLOSED = ("approved", "rejected")
 
 
 def _date(entry) -> float:
@@ -94,6 +99,52 @@ def check(api, entries: list, save: Callable = update_history, now: float = None
                 fields["c411_reason"] = str(d["rejectionReason"])
         save(ih, **fields)
     return newly
+
+
+def approved_count(entries: list) -> int:
+    """Torrents validés sur C411 d'après l'historique (un par info-hash)."""
+    return len({str(e.get("infohash", "")).lower() for e in entries
+                if is_published(e) and e.get("c411_status") == "approved"})
+
+
+def is_certified(entries: list, declared: bool = False) -> bool:
+    return bool(declared) or approved_count(entries) >= CERTIFIED_AT
+
+
+def waiting(entries: list, exclude: str = "") -> list:
+    """Uploads publiés encore entre les mains de la Team Pending (ni validés ni refusés) : [(infohash, nom)],
+    le plus ancien d'abord. exclude : torrent en cours de correction (il est déjà compté, il ne bloque pas)."""
+    closed = {str(e.get("infohash", "")).lower() for e in entries if e.get("c411_status") in CLOSED}
+    out = {}
+    for e in sorted(entries, key=_date):
+        ih = str(e.get("infohash", "")).lower()
+        if is_published(e) and ih not in closed and ih != (exclude or "").lower():
+            out.setdefault(ih, e.get("name", ""))
+    return list(out.items())
+
+
+def publish_blocker(entries: list, declared_certified: bool = False, exclude: str = "") -> str:
+    """Nom de l'upload en attente qui empêche d'en publier un autre (uploader non certifié), sinon ""."""
+    if is_certified(entries, declared_certified):
+        return ""
+    w = waiting(entries, exclude)
+    return w[0][1] or w[0][0] if w else ""
+
+
+def validated_nfo_files(nfo_root, entries: list) -> list:
+    """NFO des torrents validés par C411 : le NFO est en ligne avec le torrent, la copie locale ne sert plus.
+    Chemin noté dans l'historique, sinon déduit du nom (entrées antérieures). En attente, le NFO reste (une
+    modification demandée peut le faire changer)."""
+    from pathlib import Path
+    ok = {str(e.get("infohash", "")).lower() for e in entries if e.get("c411_status") == "approved"}
+    files = []
+    for e in entries:
+        if str(e.get("infohash", "")).lower() in ok and e.get("infohash"):
+            if e.get("nfo"):
+                files.append(Path(e["nfo"]))
+            if e.get("name"):
+                files.append(Path(nfo_root) / f"{_safe(e['name'])}.nfo")
+    return list(dict.fromkeys(files))
 
 
 def _safe(name: str) -> str:

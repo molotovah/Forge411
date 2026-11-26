@@ -115,6 +115,42 @@ class CheckTests(unittest.TestCase):
         self.assertEqual(C.remove_history([bb]), 1)
 
 
+class PendingLimitTests(unittest.TestCase):
+    """Règle C411 : non certifié (moins de 15 torrents validés), un seul upload à la fois en attente."""
+
+    def test_one_waiting_blocks_until_certified(self):
+        entries = [entry(ih="aa", c411_status="approved"), entry(ih="bb")]
+        self.assertEqual(M.publish_blocker(entries), "Release.bb-T")
+        self.assertEqual(M.publish_blocker(entries, declared_certified=True), "")
+
+    def test_modification_requested_still_waiting(self):
+        """Pas visible sur C411 depuis des jours (modification demandée) : toujours en attente."""
+        entries = [entry(ih="bb", date="2026-11-01 10:00")]
+        self.assertEqual(M.label(entries[0], NOW), "À vérifier")
+        self.assertEqual(M.waiting(entries), [("bb", "Release.bb-T")])
+
+    def test_closed_and_drafts_do_not_block(self):
+        entries = [entry(ih="aa", c411_status="approved"), entry(ih="bb", c411_status="rejected"),
+                   entry(action="Brouillon", ih="cc")]
+        self.assertEqual(M.waiting(entries), [])
+        self.assertEqual(M.publish_blocker(entries), "")
+
+    def test_correction_of_waiting_torrent_not_blocked_by_itself(self):
+        entries = [entry(ih="bb"), entry(action="Correction", ih="bb", date="2026-11-26 11:00")]
+        self.assertEqual(M.waiting(entries), [("bb", "Release.bb-T")])
+        self.assertEqual(M.publish_blocker(entries, exclude="BB"), "")
+
+    def test_certified_after_15_validated(self):
+        ok = [entry(ih=f"{i:02x}", c411_status="approved") for i in range(M.CERTIFIED_AT - 1)]
+        waiting = [entry(ih="ff")]
+        self.assertFalse(M.is_certified(ok))
+        self.assertTrue(M.publish_blocker(ok + waiting))
+        ok.append(entry(ih="fe", c411_status="approved"))
+        ok.append(entry(action="Correction", ih="fe", c411_status="approved"))     # même torrent : compté une fois
+        self.assertEqual(M.approved_count(ok), M.CERTIFIED_AT)
+        self.assertEqual(M.publish_blocker(ok + waiting), "")
+
+
 class CaptureCleanupTests(unittest.TestCase):
     def test_only_validated_torrents_lose_their_captures(self):
         with tempfile.TemporaryDirectory() as d:
@@ -131,6 +167,29 @@ class CaptureCleanupTests(unittest.TestCase):
                        entry(action="Brouillon", ih="", name="Brouillon-T")]
             C.remove_captures(cfg, *M.validated_capture_dirs(root, entries))
             self.assertEqual(sorted(p.name for p in root.iterdir()), ["Brouillon-T", "Release.bb-T"])
+
+    def test_only_validated_torrents_lose_their_nfo(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            cfg = C.Config(out / "config.json")
+            cfg.update({"output_dir": str(out)})
+            root = cfg.nfo_dir
+            root.mkdir(parents=True, exist_ok=True)
+            for n in ("Release.aa-T", "Release.aa.v2-T", "Release.bb-T", "Brouillon-T", "Ancien-T"):
+                (root / f"{n}.nfo").write_text("nfo")
+            src = out / "source"
+            src.mkdir()
+            (src / "Release.cc-T.nfo").write_text("nfo de la source")
+            entries = [entry(ih="aa", c411_status="approved", nfo=str(root / "Release.aa-T.nfo")),
+                       entry(action="Correction", ih="aa", name="Release.aa.v2-T"),     # nom corrigé, même torrent
+                       entry(ih="dd", c411_status="approved", name="Ancien-T"),         # sans chemin noté
+                       entry(ih="cc", c411_status="approved", nfo=str(src / "Release.cc-T.nfo")),
+                       entry(ih="bb"),                                                  # en attente : gardé
+                       entry(action="Brouillon", ih="", name="Brouillon-T")]
+            n = C.remove_nfos(cfg, *M.validated_nfo_files(root, entries))
+            self.assertEqual(n, 3)
+            self.assertEqual(sorted(p.name for p in root.iterdir()), ["Brouillon-T.nfo", "Release.bb-T.nfo"])
+            self.assertTrue((src / "Release.cc-T.nfo").exists())        # hors du dossier des NFO : jamais touché
 
 
 if __name__ == "__main__":

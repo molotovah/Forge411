@@ -15,9 +15,10 @@ from ..config import KEY_LINKS, add_history
 from ..lookup import LookupFailed
 from ..model import fmt_size
 from ..profiles import PROFILES, detect, get, options_payload
-from ..torrent import Cancelled, create_torrent
+from ..progress import RateMeter, fmt_eta, fmt_rate
+from ..torrent import Cancelled, create_torrent, piece_length_for
 from . import theme as T
-from .widgets import (UI, Btn, Card, Field, Images, IssueList, ScrollFrame, TextArea, Tooltip,
+from .widgets import (UI, Btn, Card, Field, Images, IssueList, ScrollFrame, StatsPanel, TextArea, Tooltip,
                       autowrap, badge, help_icon, label, link, run_bg, wrap_check)
 
 
@@ -1242,8 +1243,12 @@ class PublishStep(Step):
         self.tor_lbl.pack(fill="x")
         self.tor_bar = ttk.Progressbar(tor, mode="determinate", maximum=100)
         self.tor_bar.pack(fill="x", pady=(8, 0))
+        self.tor_stats = StatsPanel(tor, [("speed", "Vitesse"), ("elapsed", "Écoulé"), ("eta", "Restant"),
+                                          ("pieces", "Pièces")])
+        self._tor_meter = self._tor_stats_for = None
         row = tk.Frame(tor, bg=T.SURFACE)
         row.pack(fill="x", pady=(10, 0))
+        self.tor_row = row
         self.tor_btn = Btn(row, "Créer le torrent", self.make_torrent, small=True)
         self.tor_btn.pack(side="left")
         self.cancel_btn = Btn(row, "Annuler", self.cancel_torrent, kind="ghost", small=True)
@@ -1253,6 +1258,9 @@ class PublishStep(Step):
         self.seed_lbl = autowrap(label(seed, ""))
         self.seed_lbl.pack(fill="x")
         self.seed_bar = ttk.Progressbar(seed, mode="determinate", maximum=100)
+        self.seed_stats = StatsPanel(seed, [("checked", "Vérifié"), ("speed", "Vitesse"), ("elapsed", "Écoulé"),
+                                            ("eta", "Restant")])
+        self._seed_meter = self._seed_stats_for = None
         row = tk.Frame(seed, bg=T.SURFACE)
         row.pack(fill="x", pady=(10, 0))
         self.seed_btn = Btn(row, "Ajouter au client torrent", self.add_to_client, small=True)
@@ -1364,6 +1372,11 @@ class PublishStep(Step):
                                         "ici. Vérifie-le dans ton client.", fg=T.WARNING)
 
     def on_enter(self):
+        s = self.s
+        if self._cancel is None and self._tor_stats_for != (s.torrent, s.infohash, s.torrent_ready):
+            self.tor_stats.pack_forget()            # relevé d'une autre release (nouvelle session)
+        if self._seed_cancel is None and self._seed_stats_for != s.infohash:
+            self.seed_stats.pack_forget()
         self.render_correction()
         self.render_recap()
         self.render_checks()
@@ -1430,6 +1443,11 @@ class PublishStep(Step):
         else:
             items.append(("ok", "Seed confirmé par toi") if self.seed_confirm.get() else
                          ("error", "Confirme que ton client seed ce torrent (case de la section Seed)."))
+        blocker = self._pending_blocker()
+        if blocker:
+            items.append(("warning", f"Un upload attend déjà la Team Pending : {blocker}. Tant que tu n'es pas "
+                                     "uploader certifié, C411 n'en accepte qu'un à la fois : enregistre celui-ci en "
+                                     "brouillon et publie-le une fois l'autre validé."))
         v = s.catalog
         if v is not None and v.exact:
             items.append(("error", "Une release du même nom existe déjà sur C411 (doublon)."))
@@ -1466,6 +1484,10 @@ class PublishStep(Step):
         self.cancel_btn.pack(side="left")
         self.tor_bar.configure(value=0)
         self.tor_lbl.configure(text=f"Hachage de {fmt_size(s.src.total_size)}…", fg=T.TEXT)
+        self._tor_meter = RateMeter(s.src.total_size)
+        self.tor_stats.reset()
+        self._tor_pieces(0)
+        self.tor_stats.pack(fill="x", pady=(10, 0), before=self.tor_row)
         self.app.busy(True)
         self.render_checks()
         src_path = s.src.path
@@ -1475,6 +1497,8 @@ class PublishStep(Step):
             s.torrent, s.torrent_for, s.infohash = out, s.torrent_key, infohash
             self.tor_bar.configure(value=100)
             self.tor_lbl.configure(text=f"✓  {out.name}\nDossier : {out.parent}\nInfo-hash : {infohash}", fg=T.SUCCESS)
+            self._tor_finished()
+            self._tor_stats_for = (s.torrent, s.infohash, True)
             s.seed, s.seeding = "", False
             self.seed_confirm.set(False)
             self.render_checks()
@@ -1485,15 +1509,44 @@ class PublishStep(Step):
         def err(e):
             self._done_torrent()
             self.tor_bar.configure(value=0)
+            self.tor_stats.pack_forget()
             self.tor_lbl.configure(text="Création annulée." if isinstance(e, Cancelled) else f"Erreur : {e}",
                                    fg=T.MUTED if isinstance(e, Cancelled) else T.ERROR)
             self.render_checks()
         run_bg(lambda: create_torrent(src_path, announce, out, lambda f: UI.call(self._progress, f), cancel), ok, err)
 
     def _progress(self, f):
+        if not self.winfo_exists() or self._tor_meter is None:
+            return
         total = self.s.src.total_size
         self.tor_bar.configure(value=f * 100)
         self.tor_lbl.configure(text=f"Hachage… {f * 100:.0f} %  ({fmt_size(int(total * f))} / {fmt_size(total)})")
+        r = self._tor_meter.update(total * f)
+        self.tor_stats.set("speed", fmt_rate(r.speed), T.ACCENT)
+        self.tor_stats.set("elapsed", fmt_eta(r.elapsed))
+        self.tor_stats.set("eta", fmt_eta(r.eta))
+        self._tor_pieces(r.done)
+
+    def _tor_pieces(self, done):
+        total = self.s.src.total_size
+        plen = piece_length_for(total)
+        count = -(-total // plen)
+        n = len(self.s.src.files)
+        self.tor_stats.set("pieces", f"{min(done // plen, count)} / {count}")
+        self.tor_stats.note.configure(
+            text=f"Pièces de {fmt_size(plen)} (SHA-1) • {n} fichier{'s' if n > 1 else ''} • "
+                 f"{fmt_size(total)} à lire sur le disque", fg=T.MUTED)
+
+    def _tor_finished(self):
+        r = self._tor_meter.update(self.s.src.total_size)
+        count = -(-r.total // piece_length_for(r.total))
+        self.tor_stats.set("speed", fmt_rate(r.average) if r.average else "—", T.ACCENT)
+        self.tor_stats.set("elapsed", fmt_eta(r.elapsed))
+        self.tor_stats.set("eta", "Terminé", T.SUCCESS)
+        self.tor_stats.set("pieces", f"{count} / {count}", T.SUCCESS)
+        self.tor_stats.note.configure(text=f"Hachage terminé en {fmt_eta(r.elapsed)}, vitesse moyenne "
+                                           f"{fmt_rate(r.average) if r.average else '—'}.", fg=T.MUTED)
+        self._tor_meter = None
 
     def _done_torrent(self):
         self._cancel = None
@@ -1530,14 +1583,35 @@ class PublishStep(Step):
             messagebox.showwarning("Publier", "Le torrent n'est pas en seed dans ton client : C411 le refuserait.\n\n"
                                               "Ajoute-le au client (section Seed) et attends « En seed ».", parent=self)
             return
-        if not messagebox.askyesno("Publier", f"Publier maintenant sur C411 ?\n\n{self.s.name}", parent=self):
+        blocker = self._pending_blocker()
+        if blocker:
+            if not messagebox.askyesno(
+                    "Upload déjà en attente",
+                    f"Un upload attend déjà la Team Pending :\n{blocker}\n\nTant que tu n'es pas uploader certifié, "
+                    "C411 n'accepte qu'un upload à la fois en attente (modification demandée comprise). Mieux vaut "
+                    "enregistrer celui-ci en brouillon.\n\nPublier quand même ? (seulement si l'autre a été validé, "
+                    "refusé ou supprimé entre-temps)", icon="warning", parent=self):
+                return
+        elif not messagebox.askyesno("Publier", f"Publier maintenant sur C411 ?\n\n{self.s.name}", parent=self):
             return
         self._send("Publication", lambda api: api.upload(**self._payload()))
 
+    def _pending_blocker(self) -> str:
+        """Upload déjà en attente de validation qui empêche d'en publier un autre (uploader non certifié)."""
+        from .. import moderation as MOD
+        from ..config import read_history
+        s = self.s
+        if getattr(s, "correction", None):
+            return ""
+        return MOD.publish_blocker(read_history(), self.app.cfg.get("uploader_certified"), s.infohash or "")
+
     def _shots_entry(self) -> dict:
-        """Dossier des captures noté dans l'historique : supprimé quand C411 aura validé le torrent."""
+        """Dossier des captures et NFO notés dans l'historique : supprimés quand C411 aura validé le torrent."""
         d = getattr(self.s, "shots_dir", None)
-        return {"shots_dir": str(d)} if d else {}
+        out = {"shots_dir": str(d)} if d else {}
+        if self.s.nfo_path:
+            out["nfo"] = str(self.s.nfo_path)
+        return out
 
     def _send(self, what, fn):
         try:
@@ -1580,6 +1654,7 @@ class PublishStep(Step):
                                     fg=T.MUTED)
             self.seed_btn.pack_forget()
             self.seed_bar.pack_forget()
+            self.seed_stats.pack_forget()
             if not self.seed_check.winfo_ismapped():
                 self.seed_check.pack(fill="x", pady=(10, 0))
             return
@@ -1606,6 +1681,9 @@ class PublishStep(Step):
         s.seed = f"Ajout à {client.name}…"
         self.seed_bar.configure(value=0)
         self.seed_bar.pack(fill="x", pady=(8, 0), before=self.seed_btn.master)
+        self._seed_meter, self._seed_stats_for = None, s.infohash
+        self.seed_stats.reset()
+        self.seed_stats.pack(fill="x", pady=(10, 0), before=self.seed_btn.master)
         self.render_seed()
         torrent, save, ih = s.torrent, CL.save_path(self.app.cfg, s.src.path.parent), s.infohash
 
@@ -1624,6 +1702,7 @@ class PublishStep(Step):
             self._seed_cancel = None
             s.seeding, s.seed = True, ""
             self.seed_bar.configure(value=100)
+            self._seed_finished()
             self.render_seed()
             self.render_checks()
 
@@ -1631,6 +1710,8 @@ class PublishStep(Step):
             self._seed_cancel = None
             s.seed = f"✕  {e}"
             self.seed_bar.pack_forget()
+            self.seed_stats.pack_forget()
+            self._seed_meter = None
             self.render_seed()
             self.render_checks()
         run_bg(work, ok, err)
@@ -1640,7 +1721,28 @@ class PublishStep(Step):
             return
         self.s.seed = f"{st.state} : {st.progress * 100:.0f} %"
         self.seed_bar.configure(value=st.progress * 100)
+        total = self.s.src.total_size
+        if self._seed_meter is None:                # 1er relevé : le client a pu commencer avant nous
+            self._seed_meter = RateMeter(total, done=total * st.progress)
+        r = self._seed_meter.update(total * st.progress)
+        self.seed_stats.set("checked", f"{st.progress * 100:.0f} %", T.SUCCESS if st.progress >= 1 else T.TEXT)
+        self.seed_stats.set("speed", fmt_rate(r.speed), T.ACCENT)
+        self.seed_stats.set("elapsed", fmt_eta(r.elapsed))
+        self.seed_stats.set("eta", fmt_eta(r.eta))
+        self.seed_stats.note.configure(text=f"{st.state} • {fmt_size(r.done)} / {fmt_size(total)} relus par le "
+                                            "client sur le disque", fg=T.MUTED)
         self.render_seed()
+
+    def _seed_finished(self):
+        total = self.s.src.total_size
+        r = self._seed_meter.update(total) if self._seed_meter else None
+        self.seed_stats.set("checked", "100 %", T.SUCCESS)
+        self.seed_stats.set("speed", fmt_rate(r.average) if r and r.average else "—", T.ACCENT)
+        self.seed_stats.set("elapsed", fmt_eta(r.elapsed) if r else "—")
+        self.seed_stats.set("eta", "Terminé", T.SUCCESS)
+        self.seed_stats.note.configure(text=f"Données vérifiées à 100 % ({fmt_size(total)}) : le client seed.",
+                                       fg=T.MUTED)
+        self._seed_meter = None
 
     # ── Catalogue C411 (doublons, slots) ──────────────────────────────────
     def load_catalog(self):

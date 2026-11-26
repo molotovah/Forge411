@@ -164,11 +164,17 @@ class App(tk.Tk):
         if not names:
             return
         self._sweep_captures()
+        from .. import moderation as MOD
+        from ..config import read_history
         more = f" (et {len(names) - 1} autre{'s' if len(names) > 2 else ''})" if len(names) > 1 else ""
         self.status.configure(text=f"Validé sur C411 : {names[0]}{more}")
-        self._toast(f"Validé sur C411{more}", names[0])
+        hist = read_history()
+        declared = self.cfg.get("uploader_certified")
+        free = not MOD.is_certified(hist, declared) and not MOD.waiting(hist)    # non certifié : la place est libre
+        nxt = "Plus aucun upload en attente : tu peux publier le suivant (un brouillon, par exemple)." if free else ""
+        self._toast(f"Validé sur C411{more}", names[0], nxt)
 
-    def _toast(self, title, text):
+    def _toast(self, title, text, hint=""):
         """Notification discrète en bas à droite de la fenêtre, avec accès à l'historique (fermée après 30 s)."""
         old = getattr(self, "_toast_box", None)
         if old is not None and old.winfo_exists():
@@ -182,6 +188,9 @@ class App(tk.Tk):
         close.bind("<Button-1>", lambda e: box.destroy())
         name = label(box, "", fg=T.TEXT, font=T.F_SMALL, bg=T.SUCCESS_SOFT, width=52)
         wrap_name(name, text).pack(fill="x", padx=14, pady=(4, 6))       # nom pointé : coupé après les points
+        if hint:
+            label(box, hint, fg=T.SUCCESS, font=T.F_SMALL_B, bg=T.SUCCESS_SOFT, wraplength=T.px(self, 360),
+                  justify="left", anchor="w").pack(fill="x", padx=14, pady=(0, 6))
         row = tk.Frame(box, bg=T.SUCCESS_SOFT)
         row.pack(fill="x", padx=14, pady=(0, 10))
         Btn(row, "Voir l'historique", lambda: (box.destroy(), self.open_history()), small=True).pack(side="left")
@@ -190,14 +199,18 @@ class App(tk.Tk):
         self.after(30000, lambda: box.winfo_exists() and box.destroy())
 
     def _sweep_captures(self):
-        """Supprime les captures des torrents validés par C411 (images hébergées, liens dans la présentation)."""
+        """Supprime les captures et NFO des torrents validés par C411 (images hébergées, NFO en ligne avec le
+        torrent)."""
         from .. import moderation as MOD
-        from ..config import read_history, remove_captures
+        from ..config import read_history, remove_captures, remove_nfos
         cfg = self.cfg
 
         def work():
+            hist = read_history()
             if cfg.captures_dir.is_dir():
-                remove_captures(cfg, *MOD.validated_capture_dirs(cfg.captures_dir, read_history()))
+                remove_captures(cfg, *MOD.validated_capture_dirs(cfg.captures_dir, hist))
+            if cfg.nfo_dir.is_dir():
+                remove_nfos(cfg, *MOD.validated_nfo_files(cfg.nfo_dir, hist))
         threading.Thread(target=work, daemon=True).start()
 
     # ── Construction ──────────────────────────────────────────────────────
