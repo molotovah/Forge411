@@ -2,6 +2,16 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [SemVer](https://semver.org/lang/fr/).
 
+## [2.4.0] - 2026-11-26
+
+### Ajouté
+- Courbe de vitesse sous les tuiles pendant le hachage du torrent et le déplacement vers le dossier de seed, avec la vitesse moyenne en pointillé et le maximum atteint. Coût mesuré : moins d'une milliseconde par mise à jour.
+- Boutons vers les dossiers : « Ouvrir l'emplacement » de la source (étape Source), « Afficher le .torrent », « Afficher le NFO » et « Dossier des captures » (étape Publication), « Ouvrir » à côté des dossiers des Paramètres.
+- Captures d'écran manquantes : encart bien visible au-dessus de la description, avec le nombre de captures présentes et exigées et un grand bouton « Ajouter des captures ». À l'étape Publication, un bouton ramène à l'étape Présentation quand elles manquent encore.
+
+### Modifié
+- Déplacement de la source vers le dossier de seed : mêmes tuiles que le hachage du torrent (vitesse, temps écoulé, temps restant, fichier en cours), progression sur le total réel du dossier, résumé à la fin (taille, durée, vitesse moyenne).
+
 ## [2.3.0] - 2026-11-26
 
 ### Ajouté

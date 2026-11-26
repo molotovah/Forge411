@@ -375,6 +375,17 @@ class SettingsDialog(Dialog):
                 self.v[key].set(p)
         Btn(cell, "Parcourir", browse, small=True).pack(side="left", padx=(8, 0))
 
+        def open_dir():
+            from .widgets import reveal
+            p = Path(self.v[key].get().strip() or ".")
+            if p.is_dir():
+                reveal(p)
+            else:
+                messagebox.showinfo("Dossier", f"Dossier introuvable : {p}", parent=self)
+        b = Btn(cell, "Ouvrir", open_dir, kind="ghost", small=True)
+        b.pack(side="left", padx=(4, 0))
+        Tooltip(b, "Ouvre ce dossier dans l'explorateur.")
+
     # ── Navigation ────────────────────────────────────────────────────────
     def select(self, key):
         if self.current:
@@ -913,12 +924,8 @@ class HistoryDialog(Dialog):
 
 def _reveal(path: Path):
     """Ouvre l'explorateur sur le fichier (sélectionné sous Windows)."""
-    import subprocess
-    import sys
-    if sys.platform == "win32":
-        subprocess.Popen(["explorer", "/select,", str(path)])
-    else:
-        webbrowser.open(path.parent.as_uri())
+    from .widgets import reveal
+    reveal(path)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

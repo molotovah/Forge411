@@ -18,7 +18,7 @@ from ..profiles import PROFILES, detect, get, options_payload
 from ..progress import RateMeter, fmt_eta, fmt_rate
 from ..torrent import Cancelled, create_torrent, piece_length_for
 from . import theme as T
-from .widgets import (UI, Btn, Card, Field, Images, IssueList, ScrollFrame, StatsPanel, TextArea, Tooltip,
+from .widgets import (UI, Btn, Card, Field, Images, IssueList, ScrollFrame, StatsPanel, TextArea, Tooltip, reveal,
                       autowrap, badge, help_icon, label, link, run_bg, wrap_check)
 
 
@@ -121,6 +121,9 @@ class SourceStep(Step):
         self.loading_lbl.pack(fill="x")
         self.loading_bar = ttk.Progressbar(self.loading, mode="indeterminate")
         self.loading_bar.pack(fill="x", pady=(6, 0))
+        # Déplacement vers le dossier de seed : mêmes tuiles que le hachage du torrent
+        self.move_stats = StatsPanel(self.loading, [("speed", "Vitesse"), ("elapsed", "Écoulé"), ("eta", "Restant"),
+                                                    ("files", "Fichiers")], chart=True)
         self.result = tk.Frame(self.root, bg=T.BG)
         self.result.pack(fill="both", expand=True)
 
@@ -162,13 +165,14 @@ class SourceStep(Step):
     def _start_loading(self, text):
         self.clear(self.result)
         self.loading.pack(fill="x", pady=(0, 14), before=self.result)
-        self.loading_lbl.configure(text=text)
+        self.loading_lbl.configure(text=text, fg=T.MUTED)
         self.loading_bar.configure(mode="indeterminate")
         self.loading_bar.start(12)
         self.app.busy(True)
 
     def _stop_loading(self):
         self.loading_bar.stop()
+        self.move_stats.pack_forget()
         self.loading.pack_forget()
         self.app.busy(False)
 
@@ -224,7 +228,11 @@ class SourceStep(Step):
         src, prof = s.src, s.profile
         body = self.section(self.result, "")
         autowrap(label(body, src.path.name, font=T.F_BIG)).pack(fill="x")
-        autowrap(label(body, str(src.path.parent), fg=T.FAINT, font=T.F_SMALL)).pack(fill="x")
+        where = tk.Frame(body, bg=T.SURFACE)
+        where.pack(fill="x")
+        Btn(where, "Ouvrir l'emplacement", lambda p=src.path: reveal(p), kind="ghost", small=True).pack(side="right")
+        autowrap(label(where, str(src.path.parent), fg=T.FAINT, font=T.F_SMALL)).pack(side="left", fill="x",
+                                                                                  expand=True)
         chips = tk.Frame(body, bg=T.SURFACE)
         chips.pack(fill="x", pady=(10, 0))
         for text, tone in ((f"{prof.icon} {prof.label}", "accent"), (fmt_size(src.total_size), "muted"),
@@ -280,27 +288,42 @@ class SourceStep(Step):
         old_path = src.path
         if not messagebox.askyesno("Déplacer", f"Déplacer « {src.path.name} » vers\n{dest} ?", parent=self):
             return
-        self._start_loading("Déplacement…")
+        self._start_loading(f"Déplacement de {src.path.name} vers {dest}…")
         self.loading_bar.stop()
         self.loading_bar.configure(mode="determinate", value=0)
+        self.move_stats.reset()
+        self.move_stats.note.configure(text="Même disque : déplacement immédiat. Sinon copie, puis suppression de "
+                                            "l'original une fois tout copié.", fg=T.MUTED)
+        self.move_stats.pack(fill="x", pady=(10, 0))
+        meter, last = [None], [None]            # mesure du débit, dernier relevé (résumé final)
 
         def ok(_):
+            r = last[0]
             self._stop_loading()
             fs.remap_paths(self.s.analysis, old_path, src.path)   # captures, NFO… lisent la vidéo au nouvel endroit
             self.app.invalidate_torrent()
             self.render()
-        import time
-        total, t0 = src.total_size, time.monotonic()
+            if r is not None:
+                self.app.status.configure(text=f"Déplacé dans le dossier de seed : {fmt_size(r.total)} en "
+                                               f"{fmt_eta(r.elapsed)} ({fmt_rate(r.average) if r.average else '—'})")
 
-        def progress(f):
-            el = max(time.monotonic() - t0, 0.001)
-            speed = total * f / el
-            eta = (total * (1 - f) / speed) if speed > 0 else 0
-            UI.call(self.loading_bar.configure, {"value": f * 100})
-            UI.call(self.loading_lbl.configure, {"text": f"Déplacement… {fmt_size(int(total * f))} / {fmt_size(total)}"
-                                                         f" · {fmt_size(int(speed))}/s · reste {int(eta // 60)} min "
-                                                         f"{int(eta % 60):02d} s"})
-        run_bg(lambda: fs.move(src, dest, progress),
+        def show(done, total, i, n):                # thread Tk
+            if not self.winfo_exists():
+                return
+            if meter[0] is None or meter[0].total != total:
+                meter[0] = RateMeter(total)
+            r = last[0] = meter[0].update(done)
+            self.loading_bar.configure(value=r.fraction * 100)
+            self.loading_lbl.configure(text=f"Copie vers {dest}… {r.fraction * 100:.0f} %  "
+                                            f"({fmt_size(r.done)} / {fmt_size(r.total)})", fg=T.TEXT)
+            self.move_stats.set("speed", fmt_rate(r.speed), T.ACCENT)
+            self.move_stats.set("elapsed", fmt_eta(r.elapsed))
+            self.move_stats.set("eta", fmt_eta(r.eta))
+            self.move_stats.set("files", f"{i} / {n}", T.SUCCESS if done >= total else T.TEXT)
+            if r.speed:
+                self.move_stats.plot(r.speed, r.average)
+
+        run_bg(lambda: fs.move(src, dest, lambda *a: UI.call(show, *a)),
                ok, lambda e: (self._stop_loading(), messagebox.showerror("Déplacement impossible", str(e), parent=self)))
 
     def ready(self):
@@ -959,6 +982,18 @@ class PresentStep(Step):
         self.shots_btn.pack(side="right", padx=(0, 8))
         self.shots_lbl = label(bar, "", fg=T.MUTED, font=T.F_SMALL)
         self.shots_lbl.pack(side="right", padx=(0, 8))
+        # Captures manquantes : encart bien visible au-dessus de la description (le petit bouton de la barre
+        # passait inaperçu)
+        self.shots_call = Card(right, padding=0, bg=T.WARNING_SOFT, border=T.WARNING)
+        call = self.shots_call.body
+        self.shots_call_btn = Btn(call, "Ajouter des captures", self.add_screens, kind="primary")
+        self.shots_call_btn.pack(side="right", padx=(8, 14), pady=12)
+        txt = tk.Frame(call, bg=T.WARNING_SOFT)
+        txt.pack(side="left", fill="x", expand=True, padx=(14, 0), pady=10)
+        self.shots_call_title = label(txt, "", fg=T.WARNING, font=T.F_UI_B, bg=T.WARNING_SOFT)
+        self.shots_call_title.pack(fill="x")
+        self.shots_call_text = autowrap(label(txt, "", fg=T.TEXT, font=T.F_SMALL, bg=T.WARNING_SOFT))
+        self.shots_call_text.pack(fill="x")
         self.desc_issues = IssueList(right)
         self.desc_issues.pack(fill="x", pady=(0, 8))
         self.desc = TextArea(right, height=30, mono=False)
@@ -988,7 +1023,33 @@ class PresentStep(Step):
         s = self.s
         return rules.check_description(s.description, s.profile.shot_rule(s.ctx()), s.ident.image if s.ident else "")
 
+    def _shots_enabled(self, on: bool):
+        self.shots_btn.set_enabled(on)
+        self.shots_call_btn.set_enabled(on)
+
+    def render_shots_call(self):
+        from .. import rules
+        s = self.s
+        rule = s.profile.shot_rule(s.ctx())
+        miss = rules.shots_missing(s.description, rule, s.ident.image if s.ident else "")
+        if not miss:
+            self.shots_call.pack_forget()
+            return
+        have, want, required = miss
+        where = f" sur {rule.hosts_label}" if rule.hosts_label else ""
+        if required:
+            self.shots_call_title.configure(text=f"Captures d'écran manquantes : {have} sur {want} minimum{where}")
+            self.shots_call_text.configure(text="C411 refuse l'upload sans elles. Forge411 les extrait de la vidéo "
+                                                "(ou prend tes images), les héberge et les ajoute à la description.")
+        else:
+            self.shots_call_title.configure(text=f"Aucune capture d'écran ({want} conseillées)")
+            self.shots_call_text.configure(text="Facultatif pour cette catégorie, mais une présentation avec des "
+                                                "captures est mieux accueillie.")
+        if not self.shots_call.winfo_ismapped():
+            self.shots_call.pack(fill="x", pady=(0, 10), before=self.desc_issues)
+
     def render_desc_checks(self):
+        self.render_shots_call()
         c = self.desc_check()
         rule = self.s.profile.shot_rule(self.s.ctx())
         items = c.items()
@@ -1046,7 +1107,7 @@ class PresentStep(Step):
         if not messagebox.askyesno("Captures", f"{what} et les envoyer sur {SC.HOSTS[host]} ?\n\n"
                                                "Les images seront publiques chez l'hébergeur.", parent=self):
             return
-        self.shots_btn.set_enabled(False)
+        self._shots_enabled(False)
         self.app.busy(True)
 
         def work():
@@ -1058,7 +1119,7 @@ class PresentStep(Step):
 
         def err(e):
             self.app.busy(False)
-            self.shots_btn.set_enabled(True)
+            self._shots_enabled(True)
             self.shots_lbl.configure(text="", fg=T.MUTED)
             messagebox.showerror("Captures", str(e), parent=self)
         run_bg(work, self._append_shots, err)
@@ -1093,7 +1154,7 @@ class PresentStep(Step):
     def _append_shots(self, block):
         s = self.s
         self.app.busy(False)
-        self.shots_btn.set_enabled(True)
+        self._shots_enabled(True)
         if not block:
             self.shots_lbl.configure(text="", fg=T.MUTED)
             return
@@ -1111,7 +1172,7 @@ class PresentStep(Step):
 
         def ready(paths):
             self.app.busy(False)
-            self.shots_btn.set_enabled(True)
+            self._shots_enabled(True)
             self.shots_lbl.configure(text="", fg=T.MUTED)
             folder = paths[0].parent if paths else out
             SC.open_folder(folder)
@@ -1123,12 +1184,12 @@ class PresentStep(Step):
         if mf is None:
             ready(files)
             return
-        self.shots_btn.set_enabled(False)
+        self._shots_enabled(False)
         self.app.busy(True)
 
         def err(e):
             self.app.busy(False)
-            self.shots_btn.set_enabled(True)
+            self._shots_enabled(True)
             self.shots_lbl.configure(text="", fg=T.MUTED)
             messagebox.showerror("Captures", str(e), parent=self)
         run_bg(lambda: [sh.path for sh in self._extract(SC, mf, out, count)], ready, err)
@@ -1243,7 +1304,7 @@ class PublishStep(Step):
         self.tor_bar = ttk.Progressbar(tor, mode="determinate", maximum=100)
         self.tor_bar.pack(fill="x", pady=(8, 0))
         self.tor_stats = StatsPanel(tor, [("speed", "Vitesse"), ("elapsed", "Écoulé"), ("eta", "Restant"),
-                                          ("pieces", "Pièces")])
+                                          ("pieces", "Pièces")], chart=True)
         self._tor_meter = self._tor_stats_for = None
         row = tk.Frame(tor, bg=T.SURFACE)
         row.pack(fill="x", pady=(10, 0))
@@ -1251,6 +1312,8 @@ class PublishStep(Step):
         self.tor_btn = Btn(row, "Créer le torrent", self.make_torrent, small=True)
         self.tor_btn.pack(side="left")
         self.cancel_btn = Btn(row, "Annuler", self.cancel_torrent, kind="ghost", small=True)
+        self.links = tk.Frame(row, bg=T.SURFACE)          # fichiers produits : .torrent, NFO, captures
+        self.links.pack(side="right")
         seed = self.section(self.root, "Seed", "C411 refuse un torrent qui n'est pas déjà seedé.",
                             help="Avec un client configuré (Paramètres › Client torrent), Forge411 y ajoute le "
                                  "torrent, avec le dossier de la source comme emplacement, et suit la vérification.")
@@ -1306,6 +1369,9 @@ class PublishStep(Step):
         self.checks_box = self.section(self.root, "Vérifications")
         self.checks = IssueList(self.checks_box)
         self.checks.pack(fill="x")
+        self.shots_go = Btn(self.checks_box, "Ajouter les captures (étape Présentation)",
+                            lambda: self.app.goto(next(i for i, st in enumerate(self.app.steps)
+                                                         if isinstance(st, PresentStep))), kind="primary", small=True)
         self.publish_btn = self.draft_btn = None
         self._cancel = None
 
@@ -1377,6 +1443,7 @@ class PublishStep(Step):
         if self._seed_cancel is None and self._seed_stats_for != s.infohash:
             self.seed_stats.pack_forget()
         self.render_correction()
+        self.render_links()
         self.render_recap()
         self.render_checks()
         s = self.s
@@ -1458,6 +1525,12 @@ class PublishStep(Step):
             items.append(("ok", "Justification hors slot rédigée") if j >= 30 else
                          ("warning", "Slot probablement occupé : rédige une justification hors slot (30 caractères min.)."))
         self.checks.show(items)
+        miss = rules.shots_missing(s.description, s.profile.shot_rule(s.ctx()), s.ident.image if s.ident else "")
+        if miss and miss[2] and not getattr(s, "correction", None):
+            if not self.shots_go.winfo_ismapped():
+                self.shots_go.pack(anchor="w", pady=(10, 0))
+        else:
+            self.shots_go.pack_forget()
         if self.publish_btn is None or not self.publish_btn.winfo_exists():
             return
         can = s.torrent_ready and s.name_ok and bool(s.nfo_path) and s.result is None and self._cancel is None
@@ -1521,6 +1594,8 @@ class PublishStep(Step):
         self.tor_bar.configure(value=f * 100)
         self.tor_lbl.configure(text=f"Hachage… {f * 100:.0f} %  ({fmt_size(int(total * f))} / {fmt_size(total)})")
         r = self._tor_meter.update(total * f)
+        if r.speed:
+            self.tor_stats.plot(r.speed, r.average)
         self.tor_stats.set("speed", fmt_rate(r.speed), T.ACCENT)
         self.tor_stats.set("elapsed", fmt_eta(r.elapsed))
         self.tor_stats.set("eta", fmt_eta(r.eta))
@@ -1553,6 +1628,21 @@ class PublishStep(Step):
         self.tor_btn.set_text("Recréer le torrent")
         self.tor_btn.pack(side="left")
         self.app.busy(False)
+        self.after_idle(self.render_links)
+
+    def render_links(self):
+        """Boutons vers les fichiers produits, utiles pour un ajout à la main au client ou un envoi depuis le site."""
+        self.clear(self.links)
+        s = self.s
+        shots = getattr(s, "shots_dir", None)
+        for text, path, tip in (("Afficher le .torrent", s.torrent if s.torrent_ready else None,
+                                 "Ouvre le dossier des torrents, fichier sélectionné."),
+                                ("Afficher le NFO", s.nfo_path, "Ouvre le dossier des NFO, fichier sélectionné."),
+                                ("Dossier des captures", shots, "Images extraites pour la présentation.")):
+            if path and Path(path).exists():
+                b = Btn(self.links, text, lambda p=path: reveal(p), kind="ghost", small=True)
+                b.pack(side="left", padx=(4, 0))
+                Tooltip(b, tip)
 
     def cancel_torrent(self):
         if self._cancel:

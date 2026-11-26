@@ -865,6 +865,27 @@ class CatalogTests(unittest.TestCase):
 
 
 class RelocateTests(unittest.TestCase):
+    def test_move_reports_bytes_and_files(self):
+        """Déplacement vers un autre disque (copie) : progression en octets sur le total réel du dossier (fichiers
+        ignorés par le torrent compris) et numéro du fichier, pour les tuiles vitesse / restant / fichiers."""
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d) / "src" / "Serie.S01"
+            root.mkdir(parents=True)
+            (root / "e1.mkv").write_bytes(b"a" * 3000)
+            (root / "e2.mkv").write_bytes(b"b" * 5000)
+            (root / "Thumbs.db").write_bytes(b"x" * 100)               # ignoré par le torrent, déplacé quand même
+            src = files.scan(root)
+            seen = []
+            with mock.patch("forge411.files.os.rename", side_effect=OSError("autre volume")):
+                files.move(src, Path(d) / "seed", lambda *a: seen.append(a))
+            self.assertEqual(seen[-1], (8100, 8100, 3, 3))
+            self.assertEqual({t for _, t, _, _ in seen}, {8100})
+            self.assertEqual(sorted({i for _, _, i, _ in seen}), [1, 2, 3])
+            self.assertEqual([b for b, *_ in seen], sorted(b for b, *_ in seen))     # jamais en arrière
+            self.assertEqual(src.path, Path(d) / "seed" / "Serie.S01")
+            self.assertFalse(root.exists())
+
     def test_analysis_follows_moved_file_and_folder(self):
         va = VideoAnalysis(videos=[MediaFile(path=Path("/dl/a.mp4"))])
         files.remap_paths({"video": va}, Path("/dl/a.mp4"), Path("/seed/a.mp4"))
@@ -1301,6 +1322,33 @@ class ClientHelpTests(unittest.TestCase):
             self.assertEqual(seen[-1], 40_000_000)
 
 
+
+class ShotsMissingTests(unittest.TestCase):
+    """Encart « Ajouter des captures » : affiché sous le minimum exigé, ou si des captures conseillées manquent."""
+
+    def test_required_and_recommended(self):
+        from forge411.rules import ShotRule, shots_missing
+        img = lambda n: "".join(f"[img]https://i.imgur.com/{i}.png[/img]" for i in range(n))
+        self.assertEqual(shots_missing(img(1), ShotRule(minimum=3)), (1, 3, True))
+        self.assertIsNone(shots_missing(img(3), ShotRule(minimum=3)))
+        self.assertEqual(shots_missing("", ShotRule(recommended=4)), (0, 4, False))
+        self.assertIsNone(shots_missing(img(1), ShotRule(recommended=4)))
+        self.assertIsNone(shots_missing("", ShotRule()))
+
+
+class SpeedChartDataTests(unittest.TestCase):
+    """Courbe de vitesse : au plus 2 x points valeurs, quelle que soit la durée (coût d'affichage constant)."""
+
+    def test_points_stay_bounded_and_average_kept(self):
+        from unittest import mock
+        from forge411.ui import widgets as W
+        c = mock.Mock(spec=W.SpeedChart)
+        c.points = 10
+        W.SpeedChart.reset(c)
+        for i in range(1000):
+            W.SpeedChart.add(c, 100.0)
+        self.assertLess(len(c.vals), 2 * c.points)
+        self.assertTrue(all(v == 100.0 for v in c.vals))
 
 class UpdateNotesTests(unittest.TestCase):
     def test_changelog_sections(self):

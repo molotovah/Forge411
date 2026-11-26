@@ -78,6 +78,17 @@ def screenshots(bbcode: str, banner: str = "", hosts: Optional[set] = None) -> l
     return out
 
 
+def shots_missing(bbcode: str, rule: ShotRule, banner: str = "") -> tuple:
+    """(captures présentes, captures attendues, exigées par C411) quand il en manque, sinon None : exigées sous le
+    minimum de la catégorie, ou conseillées et absentes. Sert à l'encart « Ajouter des captures »."""
+    if rule.minimum:
+        n = len(screenshots(bbcode, banner, rule.hosts))
+        return (n, rule.minimum, True) if n < rule.minimum else None
+    if rule.recommended and not screenshots(bbcode, banner):
+        return (0, rule.recommended, False)
+    return None
+
+
 def check_description(bbcode: str, rule: ShotRule, banner: str = "") -> Check:
     """Images non affichées et nombre de captures exigé par la catégorie."""
     c = Check()

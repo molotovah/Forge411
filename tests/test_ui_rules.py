@@ -74,6 +74,13 @@ class UiRulesTests(unittest.TestCase):
         self.assertIn('if w > int(self.cget("width")):', card)
         self.assertIn("int(self._r * 0.3) + 1", card)          # le contenu ne recouvre pas l'arrondi
 
+    def test_autowrap_initial_width(self):
+        """Libellé replié dans un encadré arrondi : sans repli initial, il réclame tout son texte sur une ligne et
+        l'encadré (qui ne rétrécit pas) garde cette largeur, au-delà de la fenêtre."""
+        src = (PKG / "ui" / "widgets.py").read_text(encoding="utf-8")
+        body = src[src.index("def autowrap("):src.index("class badge")]
+        self.assertIn("lbl.configure(wraplength=T.px(lbl, 320))", body)
+
     def test_single_global_wheel_handler(self):
         """Un bind_all par zone défilante s'accumulait à chaque fenêtre ouverte (molette de plus en plus lente)."""
         calls = []

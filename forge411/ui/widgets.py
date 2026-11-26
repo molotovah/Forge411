@@ -10,6 +10,7 @@ import webbrowser
 from tkinter import ttk
 from typing import Callable, Optional
 
+from ..model import fmt_size
 from . import theme as T
 
 try:
@@ -412,7 +413,11 @@ def style_tree(widget):
 
 
 def autowrap(lbl: tk.Label) -> tk.Label:
-    """Le texte se replie sur la largeur réellement disponible."""
+    """Le texte se replie sur la largeur réellement disponible. Repli initial à 320 px en attendant la vraie
+    largeur : sinon le libellé réclame d'abord tout son texte sur une ligne, et un encadré arrondi (qui ne
+    rétrécit pas, voir Card) garderait cette largeur, au-delà de la fenêtre."""
+    if str(lbl.cget("wraplength")) in ("0", ""):
+        lbl.configure(wraplength=T.px(lbl, 320))
     lbl.bind("<Configure>", lambda e: lbl.configure(wraplength=max(e.width - 4, 40)))
     return lbl
 
@@ -663,10 +668,72 @@ class Meter(tk.Canvas):
             self._bar(0, max(self.h, w * v), self.color)
 
 
-class StatsPanel(tk.Frame):
-    """Rangée de tuiles « libellé / valeur » (vitesse, temps restant…) sous une barre de progression."""
+class SpeedChart(tk.Canvas):
+    """Courbe de vitesse (aire + trait) et vitesse moyenne en pointillé. Au plus `points` points : au-delà,
+    les mesures voisines sont fusionnées deux à deux (coût constant, quelle que soit la durée). Une ligne et
+    une aire réutilisées (coords) : moins d'une milliseconde par mise à jour."""
 
-    def __init__(self, parent, fields: list[tuple[str, str]]):
+    def __init__(self, parent, height: int = 64, points: int = 150):
+        bg = _parent_bg(parent)
+        super().__init__(parent, height=T.px(parent, height), bg=bg, highlightthickness=0, bd=0)
+        self.points = points
+        self._area = self.create_polygon(0, 0, 0, 0, 0, 0, fill=T.ACCENT_SOFT, outline="")
+        self._avg = self.create_line(0, 0, 0, 0, fill=T.MUTED, dash=(3, 3))
+        self._line = self.create_line(0, 0, 0, 0, fill=T.ACCENT, width=2)
+        self._max = self.create_text(0, 0, text="", fill=T.FAINT, font=T.F_SMALL, anchor="ne")
+        self.reset()
+        self.bind("<Configure>", lambda e: self._draw())
+
+    def reset(self):
+        self.vals: list = []          # vitesse par point (moyenne des mesures fusionnées)
+        self._weight: list = []
+        self._step = 1                # mesures par point
+        self._pending = (0.0, 0)
+        self.average = 0.0
+        self._draw()
+
+    def add(self, speed: float, average: float = 0.0):
+        tot, n = self._pending
+        tot, n = tot + speed, n + 1
+        if n < self._step:
+            self._pending = (tot, n)
+        else:
+            self._pending = (0.0, 0)
+            self.vals.append(tot / n)
+            if len(self.vals) >= 2 * self.points:          # deux fois trop de points : fusion deux à deux
+                self.vals = [(a + b) / 2 for a, b in zip(self.vals[::2], self.vals[1::2])]
+                self._step *= 2
+        self.average = average
+        self._draw()
+
+    def _draw(self):
+        w, h = self.winfo_width(), self.winfo_height()
+        if w < 10 or len(self.vals) < 2:
+            for item in (self._area, self._line, self._avg):
+                self.coords(item, 0, 0, 0, 0)
+            self.itemconfigure(self._max, text="")
+            return
+        top = max(max(self.vals), self.average) or 1
+        head, pad = T.px(self, 16), 2                # bande du haut réservée à « max … »
+        span = h - head - pad
+        dx = (w - 1) / (len(self.vals) - 1)
+        xy = []
+        for i, v in enumerate(self.vals):
+            xy += (i * dx, h - pad - v / top * span)
+        self.coords(self._line, *xy)
+        self.coords(self._area, 0, h, *xy, w - 1, h)
+        if self.average:
+            y = h - pad - self.average / top * span
+            self.coords(self._avg, 0, y, w, y)
+        self.coords(self._max, w - 2, 0)
+        self.itemconfigure(self._max, text=f"max {fmt_size(int(top))}/s")
+
+
+class StatsPanel(tk.Frame):
+    """Rangée de tuiles « libellé / valeur » (vitesse, temps restant…) sous une barre de progression, et en
+    option la courbe de vitesse."""
+
+    def __init__(self, parent, fields: list[tuple[str, str]], chart: bool = False):
         super().__init__(parent, bg=parent.cget("bg"))
         self.values: dict[str, tk.Label] = {}
         for col, (key, caption) in enumerate(fields):
@@ -679,14 +746,41 @@ class StatsPanel(tk.Frame):
             v = tk.Label(tile, text="…", bg=T.SURFACE2, fg=T.TEXT, font=T.F_H2, anchor="w")
             v.pack(fill="x")
             self.values[key] = v
+        self.chart = None
+        if chart:
+            box = Card(self, padding=8, bg=T.SURFACE2, border=None, radius=8)
+            box.grid(row=1, column=0, columnspan=len(fields), sticky="ew", pady=(T.px(self, 8), 0))
+            self.chart = SpeedChart(box.body)
+            self.chart.pack(fill="x")
         self.note = tk.Label(self, text="", bg=self.cget("bg"), fg=T.MUTED, font=T.F_SMALL, anchor="w",
                              justify="left")
-        self.note.grid(row=1, column=0, columnspan=len(fields), sticky="ew", pady=(T.px(self, 6), 0))
+        self.note.grid(row=2, column=0, columnspan=len(fields), sticky="ew", pady=(T.px(self, 6), 0))
 
     def set(self, key: str, text: str, color: str = None):
         self.values[key].configure(text=text, fg=color or T.TEXT)
+
+    def plot(self, speed: float, average: float = 0.0):
+        if self.chart is not None:
+            self.chart.add(speed, average)
 
     def reset(self):
         for v in self.values.values():
             v.configure(text="…", fg=T.TEXT)
         self.note.configure(text="")
+        if self.chart is not None:
+            self.chart.reset()
+
+
+def reveal(path) -> None:
+    """Ouvre l'explorateur sur un fichier (sélectionné) ou un dossier."""
+    import subprocess
+    import sys
+    from pathlib import Path
+    path = Path(path)
+    if sys.platform == "win32":
+        if path.is_dir():
+            subprocess.Popen(["explorer", str(path)])
+        else:
+            subprocess.Popen(["explorer", "/select,", str(path)])
+    else:
+        webbrowser.open((path if path.is_dir() else path.parent).as_uri())

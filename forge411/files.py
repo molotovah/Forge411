@@ -181,8 +181,10 @@ def rename_files(src: Source, fixes: list) -> list:
     return done
 
 
-def move(src: Source, dest_dir: Path, progress: Callable[[float], None] = None) -> Path:
-    """Déplace la source dans dest_dir (copie + suppression si volumes différents)."""
+def move(src: Source, dest_dir: Path, progress: Callable[[int, int, int, int], None] = None) -> Path:
+    """Déplace la source dans dest_dir (copie + suppression si volumes différents). progress(octets copiés,
+    octets à copier, n° du fichier en cours, nombre de fichiers) : les totaux comptent tous les fichiers du
+    dossier, y compris ceux que le torrent ignore."""
     dest = Path(dest_dir) / src.path.name
     if dest.exists():
         raise FileExistsError(f"Existe déjà dans le dossier de seed : {dest.name}")
@@ -194,14 +196,18 @@ def move(src: Source, dest_dir: Path, progress: Callable[[float], None] = None) 
         pass
     # Tout copier (y compris les fichiers ignorés par le torrent) avant de supprimer
     files = [p for p in src.path.rglob("*") if p.is_file()] if src.is_dir else [src.path]
-    total = sum(f.stat().st_size for f in files) or 1
+    total = sum(f.stat().st_size for f in files)
     done = 0
-    for f in files:
+    for i, f in enumerate(files, 1):
         target = dest / f.relative_to(src.path) if src.is_dir else dest
         target.parent.mkdir(parents=True, exist_ok=True)
         base = done
-        copy_file(f, target, (lambda n, b=base: progress((b + n) / total)) if progress else None)
+        if progress:
+            progress(base, total, i, len(files))
+        copy_file(f, target, (lambda n, b=base, k=i: progress(b + n, total, k, len(files))) if progress else None)
         done += f.stat().st_size
+    if progress:
+        progress(total, total, len(files), len(files))
     if src.is_dir:
         shutil.rmtree(src.path)
     else:
