@@ -19,5 +19,5 @@
 
 ## Captures d'écran
 - README : données de démonstration uniquement (profil « membre », chemins sous `C:\Users\Public\Forge411-demo`), jamais le compte, l'historique ni le nom d'utilisateur Windows réels.
-- `python tools/screenshots.py` (Windows) régénère Profil, Brouillons et Historique ; comparer avec `git diff`.
+- `python tools/screenshots.py` (Windows) régénère Profil, Brouillons, Historique et la notification de validation ; comparer avec `git diff`.
 - Tests manuels sur la vraie app : sauvegarder `%APPDATA%\Forge411` avant, ne jamais publier ni envoyer de brouillon, supprimer ensuite les .torrent, NFO et captures créés.

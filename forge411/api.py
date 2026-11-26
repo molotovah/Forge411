@@ -174,6 +174,23 @@ class C411:
                                tmdb_id=attrs.get("tmdbid") or "", date=it.findtext("pubDate") or ""))
         return out
 
+    def torrent_status(self, infohash: str) -> Optional[dict]:
+        """Fiche publique d'un torrent (status, contentStatus, rejectionReason…), ou None tant qu'il n'est pas
+        visible : en attente de validation, modification demandée, refusé ou supprimé (l'API ne distingue pas)."""
+        r = self._req("GET", f"/api/torrents/{infohash.lower()}")
+        if r.status_code == 404:
+            return None
+        if r.status_code in (401, 403):
+            raise C411Error("C411 : clé API refusée.")
+        if r.status_code != 200:
+            raise C411Error(f"C411 : erreur HTTP {r.status_code}.")
+        try:
+            j = r.json()
+        except ValueError as e:
+            raise C411Error("C411 : réponse illisible.") from e
+        d = j.get("data", j) if isinstance(j, dict) else {}
+        return d if isinstance(d, dict) else {}
+
     def drafts(self) -> list:
         return self._json("/api/user/drafts").get("data", [])
 

@@ -183,6 +183,28 @@ def read_history() -> list:
     return list(reversed(out))
 
 
+def update_history(infohash: str, **fields) -> int:
+    """Ajoute ou met à jour des champs sur toutes les entrées de ce torrent. Renvoie le nombre d'entrées modifiées."""
+    if not HISTORY_PATH.exists() or not infohash:
+        return 0
+    out, n = [], 0
+    for line in HISTORY_PATH.read_text(encoding="utf-8").splitlines():
+        try:
+            e = json.loads(line)
+        except ValueError:
+            out.append(line)
+            continue
+        if str(e.get("infohash", "")).lower() == infohash.lower():
+            e.update(fields)
+            n += 1
+        out.append(json.dumps(e, ensure_ascii=False))
+    if n:
+        tmp = HISTORY_PATH.with_suffix(".tmp")
+        tmp.write_text("".join(x + "\n" for x in out), encoding="utf-8")
+        tmp.replace(HISTORY_PATH)
+    return n
+
+
 def remove_history(entries: list) -> int:
     """Retire ces entrées de l'historique (comparées par contenu) et supprime les copies d'upload (.pkl) qui ne
     servent plus à aucune entrée restante. Les .torrent ne sont jamais touchés. Renvoie le nombre retiré."""

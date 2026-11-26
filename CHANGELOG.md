@@ -2,6 +2,11 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [SemVer](https://semver.org/lang/fr/).
 
+## [2.1.7] - 2026-11-26
+
+### Ajouté
+- Suivi de la validation par la Team Pending : colonne « C411 » dans l'historique (Validé, En attente, À vérifier au-delà de 3 jours, Refusé quand C411 l'indique), filtre « En attente C411 » et heure de validation notée. Vérification au démarrage, à l'ouverture de l'historique puis toutes les 30 minutes, avec une notification dès qu'un upload est validé.
+
 ## [2.1.6] - 2026-11-26
 
 ### Ajouté

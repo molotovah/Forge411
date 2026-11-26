@@ -181,6 +181,10 @@ Forge411 crée le torrent, affiche ce qu'il reste à vérifier, puis l'envoie :
 
 **Historique** liste tes uploads dans un tableau. Clique sur un en-tête pour trier. Tu peux chercher par nom ou par type, et filtrer : publiés, brouillons, corrections ou torrent introuvable. La colonne **Torrent** indique si le fichier .torrent existe encore. Un double-clic ouvre la page sur C411. Le clic droit propose de copier le nom, d'afficher le .torrent ou de corriger l'upload. **Retirer** (ou la touche Suppr) enlève les lignes sélectionnées. **Retirer les introuvables** enlève en une fois les uploads dont le .torrent a disparu. Seul l'historique change : rien n'est supprimé sur C411, et les .torrent restent sur le disque.
 
+La colonne **C411** suit la validation par la Team Pending. Forge411 interroge C411 à son démarrage, à l'ouverture de l'historique, puis toutes les 30 minutes pour chaque upload publié pas encore validé. Une notification s'affiche dès qu'un torrent passe **Validé**, et l'heure de validation est notée. L'API ne montre un torrent qu'une fois validé : tant qu'il n'est pas visible, la ligne indique **En attente**, puis **À vérifier** au-delà de 3 jours après la dernière soumission (une modification a peut-être été demandée : vérifie sur le site). Le filtre « En attente C411 » les regroupe. Les brouillons ne sont pas suivis.
+
+<img src="docs/screenshots/26-validation.png" width="380" alt="Notification de validation">
+
 ## Client torrent et seed
 
 <img src="docs/screenshots/18-parametres-client.png" width="640" alt="Client torrent">

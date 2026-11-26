@@ -637,14 +637,15 @@ class MultiSelectDialog(Dialog):
 
 class HistoryDialog(Dialog):
     """Historique des uploads : tableau triable et filtrable, sélection multiple, retrait des entrées
-    (une par une ou toutes celles dont le .torrent n'existe plus)."""
+    (une par une ou toutes celles dont le .torrent n'existe plus), statut de validation sur C411."""
 
-    COLS = (("date", "Date", 130, False), ("name", "Release", 380, True), ("type", "Type", 150, False),
-            ("action", "Action", 130, False), ("state", "Torrent", 100, False))
-    FILTERS = ("Tout", "Publiés", "Brouillons", "Corrections", "Torrent introuvable")
+    COLS = (("date", "Date", 130, False), ("name", "Release", 360, True), ("type", "Type", 140, False),
+            ("action", "Action", 120, False), ("c411", "C411", 100, False), ("state", "Torrent", 95, False))
+    FILTERS = ("Tout", "Publiés", "Brouillons", "Corrections", "En attente C411", "Torrent introuvable")
 
     def __init__(self, parent):
-        super().__init__(parent, "Historique", 980, 600)
+        super().__init__(parent, "Historique", 1060, 600)
+        self._checked = False
         self.minsize(T.px(self, 760), T.px(self, 420))
         self.app = parent
         self.sort_col, self.sort_desc = "date", True
@@ -681,6 +682,7 @@ class HistoryDialog(Dialog):
         self.tree.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
         self.tree.tag_configure("missing", foreground=T.FAINT)
+        self.tree.tag_configure("stale", foreground=T.WARNING)       # pas validé après plusieurs jours
         self.tree.bind("<<TreeviewSelect>>", lambda e: self._sel_changed())
         self.tree.bind("<Double-1>", lambda e: self.open_url())
         self.tree.bind("<Delete>", lambda e: self.remove_selected())
@@ -715,10 +717,34 @@ class HistoryDialog(Dialog):
             return False
 
     def load(self):
+        from .. import moderation as MOD
         self.items = read_history()
-        for h in self.items:
+        for h, c411 in zip(self.items, MOD.labels(self.items)):
             h["_ok"] = self._torrent_exists(h)
+            h["_c411"] = c411
         self.refresh()
+        if not self._checked:
+            self._checked = True
+            self.check_c411()
+
+    def check_c411(self):
+        """Statut C411 des uploads en attente, en arrière-plan ; le tableau se met à jour à la réponse."""
+        from .. import moderation as MOD
+        if not MOD.to_check(self.items) or not self.app.cfg.get("c411_api_key"):
+            return
+        try:
+            api = self.app.c411()
+        except Exception:
+            return
+        self.status_note = "vérification de la validation sur C411…"
+        self.refresh()
+        items = [{k: v for k, v in h.items() if not k.startswith("_")} for h in self.items]
+
+        def done(newly):
+            self.status_note = ""
+            if self.winfo_exists():
+                self.load()
+        run_bg(lambda: MOD.check(api, items), done, lambda e: done([]))
 
     def _visible(self):
         q = self.query.get().strip().lower()
@@ -734,10 +760,12 @@ class HistoryDialog(Dialog):
                 continue
             if f == "Torrent introuvable" and h["_ok"]:
                 continue
+            if f == "En attente C411" and h["_c411"] not in ("En attente", "À vérifier"):
+                continue
             if q and q not in f"{h.get('name', '')} {h.get('type', '')}".lower():
                 continue
             out.append(h)
-        key = self.sort_col if self.sort_col != "state" else "_ok"
+        key = {"state": "_ok", "c411": "_c411"}.get(self.sort_col, self.sort_col)
         out.sort(key=lambda h: str(h.get(key, "")).lower(), reverse=self.sort_desc)
         return out
 
@@ -745,17 +773,24 @@ class HistoryDialog(Dialog):
         self.tree.delete(*self.tree.get_children())
         self.rows = {}
         for h in self._visible():
+            tags = () if h["_ok"] else ("missing",)
+            if h["_c411"] == "À vérifier":
+                tags = ("stale",)
             iid = self.tree.insert("", "end", values=(h.get("date", ""), h.get("name", "?"), h.get("type", ""),
-                                                      h.get("action", ""), "Présent" if h["_ok"] else "Introuvable"),
-                                   tags=() if h["_ok"] else ("missing",))
+                                                      h.get("action", ""), h["_c411"],
+                                                      "Présent" if h["_ok"] else "Introuvable"), tags=tags)
             self.rows[iid] = h
         for key, text, *_ in self.COLS:
             arrow = (" ▾" if self.sort_desc else " ▴") if key == self.sort_col else ""
             self.tree.heading(key, text=text + arrow)
         n, shown = len(self.items), len(self.rows)
         missing = sum(1 for h in self.items if not h["_ok"])
-        self.count.configure(text=f"{n} upload{'s' if n > 1 else ''}" + (f" · {shown} affiché{'s' if shown > 1 else ''}"
-                                                                         if shown != n else ""))
+        waiting = len({h.get("infohash") for h in self.items if h["_c411"] in ("En attente", "À vérifier")})
+        note = getattr(self, "status_note", "")
+        self.count.configure(text=f"{n} upload{'s' if n > 1 else ''}"
+                                  + (f" · {shown} affiché{'s' if shown > 1 else ''}" if shown != n else "")
+                                  + (f" · {waiting} en attente de validation" if waiting else "")
+                                  + (f" · {note}" if note else ""))
         if not self.rows:
             self.empty.configure(text="Aucun upload pour l'instant." if not n else "Aucun résultat.")
             self.empty.place(relx=0.5, rely=0.45, anchor="center")
@@ -782,7 +817,13 @@ class HistoryDialog(Dialog):
         self.del_btn.set_text(f"Retirer ({len(sel)})" if len(sel) > 1 else "Retirer")
         if one:
             where = one.get("torrent") or ""
-            self.sel_lbl.configure(text=one.get("name", "") + (f"   ·   {where}" if where else ""))
+            c411 = {"Validé": f"validé sur C411 (constaté le {one.get('c411_validated', '?')})",
+                    "Refusé": f"refusé sur C411 : {one.get('c411_reason', 'voir le site')}",
+                    "En attente": "en attente de la Team Pending",
+                    "À vérifier": "toujours pas visible sur C411 : modification demandée ? Vérifie sur le site"
+                    }.get(one["_c411"], "")
+            self.sel_lbl.configure(text=one.get("name", "") + (f"   ·   {c411}" if c411 else "")
+                                   + (f"   ·   {where}" if where and not c411 else ""))
         else:
             self.sel_lbl.configure(text=f"{len(sel)} uploads sélectionnés" if sel else
                                    "Double-clic : ouvrir sur C411 · Suppr : retirer · clic droit : plus d'actions")

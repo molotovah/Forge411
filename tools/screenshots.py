@@ -24,7 +24,8 @@ from forge411.ui import theme as T  # noqa: E402
 
 OUT = ROOT / "docs" / "screenshots"
 DEMO = Path(r"C:\Users\Public\Forge411-demo")
-SHOTS = {"profil": "19-profil.png", "brouillons": "21-brouillons.png", "historique": "25-historique.png"}
+SHOTS = {"profil": "19-profil.png", "brouillons": "21-brouillons.png", "historique": "25-historique.png",
+         "validation": "26-validation.png"}
 
 
 class DemoApi:
@@ -60,18 +61,21 @@ def demo_history():
     tor.mkdir(parents=True, exist_ok=True)
     ok = tor / "Les.Miserables.Victor.Hugo.FR.[EPUB]-NOTAG.torrent"
     ok.write_bytes(b"d")
+    ok_c411 = {"c411_status": "approved", "c411_validated": "2026-11-21 09:40"}
     rows = [("2026-11-20 18:02", "Big.Buck.Bunny.2008.VOSTFR.1080p.WEBRip.HDLight.AAC.2.0.x264-DEMO", "Films & Vidéos",
-             "Publication", ok),
+             "Publication", ok, "b1", ok_c411),
             ("2026-11-21 09:15", "Nine.Inch.Nails.Ghosts.I.IV.2008.FLAC[16bit.44.1kHz]-NOTAG", "Audio", "Brouillon",
-             tor / "absent-1.torrent"),
-            ("2026-11-22 21:40", "Les.Miserables.Victor.Hugo.FR.[EPUB]-NOTAG", "Ebook", "Publication", ok),
-            ("2026-11-23 11:05", "Les.Miserables.Victor.Hugo.FR.[EPUB]-NOTAG", "Ebook", "Correction", ok),
+             tor / "absent-1.torrent", "", {}),
+            ("2026-11-22 21:40", "Les.Miserables.Victor.Hugo.FR.[EPUB]-NOTAG", "Ebook", "Publication", ok, "c2", {}),
+            ("2026-11-22 23:10", "Les.Miserables.Victor.Hugo.FR.[EPUB]-NOTAG", "Ebook", "Correction", ok, "c2", {}),
             ("2026-11-24 15:30", "0 A.D. V0.27.0 [WIN X64 FR PORTABLE] [DRM FREE]", "Jeux Vidéo", "Brouillon (lot)",
-             tor / "absent-2.torrent"),
-            ("2026-11-25 10:12", "VLC.media.player.v3.0.21 [WINx64 FR UNLOCKED]", "Applications", "Publication", ok)]
+             tor / "absent-2.torrent", "", {}),
+            (time.strftime("%Y-%m-%d %H:%M"), "VLC.media.player.v3.0.21 [WINx64 FR UNLOCKED]", "Applications",
+             "Publication", ok, "d3", {})]
     C.HISTORY_PATH.write_text("".join(json.dumps(
-        {"date": d, "name": n, "type": t, "action": a, "torrent": str(p), "url": "https://c411.org/torrents/demo",
-         "infohash": "ab"}) + "\n" for d, n, t, a, p in rows), encoding="utf-8")
+        {"date": d, "name": n, "type": t, "action": a, "torrent": str(p),
+         "url": f"https://c411.org/torrents/{ih}" if ih else "https://c411.org/upload", "infohash": ih, **extra})
+        + "\n" for d, n, t, a, p, ih, extra in rows), encoding="utf-8")
 
 
 def shoot(kind: str):
@@ -96,6 +100,13 @@ def shoot(kind: str):
     elif kind == "brouillons":
         from forge411.ui.drafts_view import DraftsDialog
         d = DraftsDialog(root)
+    elif kind == "validation":                 # notification « Validé sur C411 » (coin de la fenêtre principale)
+        from forge411.ui.app import App
+        root.geometry("760x300+40+40")
+        root.configure(bg=T.BG)
+        root.open_history = lambda: None
+        App._toast(root, "Validé sur C411", "Big.Buck.Bunny.2008.VOSTFR.1080p.WEBRip.HDLight.AAC.2.0.x264-DEMO")
+        d = root
     else:
         demo_history()
         from forge411.ui.dialogs import HistoryDialog
@@ -104,6 +115,8 @@ def shoot(kind: str):
     d.deiconify()
     d.lift()
     d.attributes("-topmost", True)
+    if d is root:
+        root.title("Forge411")
 
     def grab():
         d.update()

@@ -23,7 +23,7 @@ from . import theme as T
 from .dialogs import HistoryDialog, SettingsDialog, UpdateDialog
 from .steps import IdentifyStep, NameStep, NfoStep, PresentStep, PublishStep, SourceStep
 from .tour import Tour
-from .widgets import UI, Btn, Tooltip, label, run_bg
+from .widgets import UI, Btn, Tooltip, label, run_bg, wrap_name
 
 STEPS = [SourceStep, IdentifyStep, NameStep, NfoStep, PresentStep, PublishStep]
 STEP_HELP = ["Choisis le fichier ou le dossier ; le type de contenu est reconnu.",
@@ -132,6 +132,52 @@ class App(tk.Tk):
         if self.cfg.get("c411_api_key"):
             self.after(800, self.fetch_profile)
         self.after(3000, self._sweep_captures)
+        self.after(6000, self._watch_moderation)
+
+    def _watch_moderation(self):
+        """Au démarrage puis toutes les 30 min : uploads validés par la Team Pending depuis la dernière fois."""
+        from .. import moderation as MOD
+        from ..config import read_history
+        self.after(MOD.CHECK_EVERY * 1000, self._watch_moderation)
+        if not self.cfg.get("c411_api_key"):
+            return
+        entries = read_history()
+        if not MOD.to_check(entries):
+            return
+        try:
+            api = self.c411()
+        except Exception:
+            return
+        run_bg(lambda: MOD.check(api, entries), self._validated,
+               lambda e: logging.info("Statut C411 non vérifié : %s", e))
+
+    def _validated(self, names):
+        if not names:
+            return
+        more = f" (et {len(names) - 1} autre{'s' if len(names) > 2 else ''})" if len(names) > 1 else ""
+        self.status.configure(text=f"Validé sur C411 : {names[0]}{more}")
+        self._toast(f"Validé sur C411{more}", names[0])
+
+    def _toast(self, title, text):
+        """Notification discrète en bas à droite de la fenêtre, avec accès à l'historique (fermée après 30 s)."""
+        old = getattr(self, "_toast_box", None)
+        if old is not None and old.winfo_exists():
+            old.destroy()
+        box = self._toast_box = tk.Frame(self, bg=T.SUCCESS_SOFT, highlightthickness=1, highlightbackground=T.SUCCESS)
+        head = tk.Frame(box, bg=T.SUCCESS_SOFT)
+        head.pack(fill="x", padx=14, pady=(10, 0))
+        label(head, "✓  " + title, fg=T.SUCCESS, font=T.F_UI_B, bg=T.SUCCESS_SOFT).pack(side="left")
+        close = label(head, "✕", fg=T.MUTED, bg=T.SUCCESS_SOFT, cursor="hand2")
+        close.pack(side="right", padx=(12, 0))
+        close.bind("<Button-1>", lambda e: box.destroy())
+        name = label(box, "", fg=T.TEXT, font=T.F_SMALL, bg=T.SUCCESS_SOFT, width=52)
+        wrap_name(name, text).pack(fill="x", padx=14, pady=(4, 6))       # nom pointé : coupé après les points
+        row = tk.Frame(box, bg=T.SUCCESS_SOFT)
+        row.pack(fill="x", padx=14, pady=(0, 10))
+        Btn(row, "Voir l'historique", lambda: (box.destroy(), self.open_history()), small=True).pack(side="left")
+        box.place(relx=1.0, rely=1.0, x=-T.px(self, 24), y=-T.px(self, 70), anchor="se")
+        box.lift()
+        self.after(30000, lambda: box.winfo_exists() and box.destroy())
 
     def _sweep_captures(self):
         """Supprime les captures des releases publiées (images hébergées, liens dans la présentation)."""
