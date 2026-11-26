@@ -24,6 +24,10 @@ from forge411.ui import theme as T  # noqa: E402
 
 OUT = ROOT / "docs" / "screenshots"
 DEMO = Path(r"C:\Users\Public\Forge411-demo")
+# Heure figée : sans elle, chaque capture changerait d'une exécution à l'autre (« Mis à jour à 17:34 »,
+# ancienneté du compte, date du dernier upload) et le workflow commiterait des images identiques à l'œil.
+NOW = time.mktime((2026, 11, 26, 18, 0, 0, 0, 0, -1))
+
 SHOTS = {"profil": "19-profil.png", "brouillons": "21-brouillons.png", "historique": "25-historique.png",
          "validation": "26-validation.png"}
 
@@ -43,8 +47,14 @@ class DemoApi:
                 {"name": "Audio", "subcategories": [{"id": 20, "name": "Musique"}]}]
 
 
+class DemoProfile(P.Profile):
+    @property
+    def days(self) -> int:
+        return (datetime.fromtimestamp(NOW, timezone.utc) - self.member_since).days
+
+
 def demo_profile(now: float) -> P.Profile:
-    p = P.Profile(username="membre", member_since=datetime(2025, 3, 14, tzinfo=timezone.utc), level=37, xp=18420,
+    p = DemoProfile(username="membre", member_since=datetime(2025, 3, 14, tzinfo=timezone.utc), level=37, xp=18420,
                   xp_into=310, xp_next=239, class_name="Team Resident Mainstream", grade="Argent II", team_tag="EXT",
                   team_name="Team EXT", zen=1840, zen_earned=12650, zen_spent=10810, up_actual=5_500_000_000_000,
                   up_credit=100 * 1024 ** 3, up_total=5_607_000_000_000, down_actual=3_350_000_000_000,
@@ -70,7 +80,7 @@ def demo_history():
             ("2026-11-22 23:10", "Les.Miserables.Victor.Hugo.FR.[EPUB]-NOTAG", "Ebook", "Correction", ok, "c2", {}),
             ("2026-11-24 15:30", "0 A.D. V0.27.0 [WIN X64 FR PORTABLE] [DRM FREE]", "Jeux Vidéo", "Brouillon (lot)",
              tor / "absent-2.torrent", "", {}),
-            (time.strftime("%Y-%m-%d %H:%M"), "VLC.media.player.v3.0.21 [WINx64 FR UNLOCKED]", "Applications",
+            (time.strftime("%Y-%m-%d %H:%M", time.localtime(NOW)), "VLC.media.player.v3.0.21 [WINx64 FR UNLOCKED]", "Applications",
              "Publication", ok, "d3", {})]
     C.HISTORY_PATH.write_text("".join(json.dumps(
         {"date": d, "name": n, "type": t, "action": a, "torrent": str(p),
@@ -81,6 +91,7 @@ def demo_history():
 def shoot(kind: str):
     from PIL import ImageGrab
     from forge411.ui.widgets import UI
+    time.time = lambda: NOW                   # statuts « En attente » / « À vérifier », délais du profil
     tmp = Path(tempfile.mkdtemp())
     C.HISTORY_PATH = tmp / "history.jsonl"
     C.PROFILE_HISTORY_PATH = tmp / "profile-history.jsonl"
@@ -95,7 +106,7 @@ def shoot(kind: str):
     root.open_correction = lambda e: None
     if kind == "profil":
         from forge411.ui.profile_view import ProfileDialog
-        root.profile_cache = (demo_profile(time.time()), time.time())
+        root.profile_cache = (demo_profile(NOW), NOW)
         d = ProfileDialog(root)
     elif kind == "brouillons":
         from forge411.ui.drafts_view import DraftsDialog
