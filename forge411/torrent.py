@@ -8,6 +8,7 @@ Règles C411 appliquées :
 """
 
 import hashlib
+import queue
 import threading
 import time
 from pathlib import Path
@@ -56,6 +57,68 @@ def bencode(v) -> bytes:
     raise TypeError(f"Type non encodable : {type(v)}")
 
 
+def _hash_pieces(files, plen: int, total: int, progress=None, cancel=None) -> bytes:
+    """Empreintes SHA-1 des pièces, lecture et calcul en parallèle : ce thread lit le disque dans des tampons
+    réutilisés (readinto, sans copie), un second calcule les empreintes (hashlib libère le GIL). Sur un disque
+    rapide, la lecture de la pièce suivante n'attend plus la fin du calcul de la précédente."""
+    free: "queue.Queue[bytearray]" = queue.Queue()
+    for _ in range(3):
+        free.put(bytearray(plen))
+    work: queue.Queue = queue.Queue()
+    digests: list = []
+    failure: list = []
+
+    def hasher():
+        while True:
+            item = work.get()
+            if item is None:
+                return
+            buf, n = item
+            try:
+                if not failure:
+                    digests.append(hashlib.sha1(memoryview(buf)[:n]).digest())
+            except Exception as e:          # ne doit pas arriver ; le lecteur le relance après coup
+                failure.append(e)
+            finally:
+                free.put(buf)
+
+    th = threading.Thread(target=hasher, daemon=True)
+    th.start()
+    done = 0
+    last_report = 0.0
+    try:
+        buf = free.get()
+        view, fill = memoryview(buf), 0
+        for f in files:
+            with open(f, "rb", buffering=0) as fh:
+                while True:
+                    if cancel is not None and cancel.is_set():
+                        raise Cancelled()
+                    n = fh.readinto(view[fill:])
+                    if not n:
+                        break
+                    fill += n
+                    done += n
+                    if fill == plen:
+                        view.release()
+                        work.put((buf, plen))
+                        buf = free.get()
+                        view, fill = memoryview(buf), 0
+                    now = time.monotonic()
+                    if progress and now - last_report > 0.2:
+                        last_report = now
+                        progress(done / total if total else 1.0)
+        view.release()
+        if fill:
+            work.put((buf, fill))
+    finally:
+        work.put(None)
+        th.join()
+    if failure:
+        raise failure[0]
+    return b"".join(digests)
+
+
 def create_torrent(
     source: Path,
     announce: str,
@@ -78,29 +141,7 @@ def create_torrent(
     total = sum(sizes)
     plen = piece_length_for(total)
 
-    pieces = bytearray()
-    buf = bytearray()
-    done = 0
-    last_report = 0.0
-    for f in files:
-        with open(f, "rb") as fh:
-            while True:
-                if cancel is not None and cancel.is_set():
-                    raise Cancelled()
-                chunk = fh.read(plen - len(buf))
-                if not chunk:
-                    break
-                buf += chunk
-                done += len(chunk)
-                if len(buf) == plen:
-                    pieces += hashlib.sha1(buf).digest()
-                    buf.clear()
-                now = time.monotonic()
-                if progress and now - last_report > 0.2:
-                    last_report = now
-                    progress(done / total if total else 1.0)
-    if buf:
-        pieces += hashlib.sha1(buf).digest()
+    pieces = _hash_pieces(files, plen, total, progress, cancel)
 
     info = {
         "name": source.name,

@@ -3,7 +3,7 @@
 import tkinter as tk
 
 from . import theme as T
-from .widgets import Btn, label
+from .widgets import Btn, Card, label
 
 
 class Tour:
@@ -52,11 +52,14 @@ class Tour:
         b = self.bubble = tk.Toplevel(self.app)
         b.wm_overrideredirect(True)
         b.attributes("-topmost", True)
-        outer = tk.Frame(b, bg=T.ACCENT)
-        outer.pack()
-        body = tk.Frame(outer, bg=T.SURFACE)
-        body.pack(padx=2, pady=2)
-        inner = tk.Frame(body, bg=T.SURFACE)
+        b.configure(bg=T.BG)
+        try:
+            b.attributes("-transparentcolor", T.BG)      # Windows : coins arrondis sur ce qui est derrière
+        except tk.TclError:
+            pass
+        card = Card(b, padding=0, border=T.ACCENT, radius=12)
+        card.pack()
+        inner = tk.Frame(card.body, bg=T.SURFACE)
         inner.pack(padx=18, pady=16)
         label(inner, f"{self.i + 1} / {len(self.steps)}", fg=T.ACCENT, font=T.F_SMALL_B).pack(fill="x")
         label(inner, title, font=T.F_H2).pack(fill="x", pady=(4, 0))

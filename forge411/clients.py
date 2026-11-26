@@ -4,9 +4,17 @@ Clients torrent (API web) : ajout du torrent créé et suivi jusqu'au seed.
 C411 refuse un torrent publié qui n'est pas déjà seedé : Forge411 ajoute le
 .torrent au client avec le dossier parent de la source comme emplacement, le
 client vérifie les données puis passe en seed, et la publication peut partir.
+
+Réglages imposés au torrent ajouté, quels que soient ceux du client :
+- vérification des données (jamais « sauter la vérification ») : un mauvais emplacement serait sinon affiché
+  « en seed » sans rien partager ;
+- disposition d'origine des fichiers (qBittorrent : pas de sous-dossier ajouté ou retiré) ;
+- démarrage forcé, hors file d'attente : un torrent « en file » n'annonce rien au tracker ;
+- aucune limite de ratio ni de durée de seed : le client ne l'arrête pas de lui-même.
 """
 
 import base64
+import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,6 +39,7 @@ class Status:
     progress: float = 0.0      # 0 à 1 (vérification ou téléchargement)
     seeding: bool = False
     error: str = ""
+    idle: bool = False         # données complètes mais rien annoncé au tracker (en file, en pause, arrêté)
 
 
 class _Base:
@@ -59,6 +68,12 @@ class _Base:
     def status(self, infohash: str) -> Optional[Status]:
         raise NotImplementedError
 
+    def ensure_active(self, infohash: str):
+        """Démarrage forcé (hors file d'attente) et aucune limite de ratio ni de durée de seed."""
+
+    def recheck(self, infohash: str):
+        """Nouvelle vérification des données (fichiers arrivés après l'ajout du torrent)."""
+
     def default_dir(self) -> str:
         """Dossier de téléchargement par défaut du client (aide à la correspondance des chemins)."""
         return ""
@@ -68,7 +83,9 @@ class _Base:
 
 class QBittorrent(_Base):
     name = "qBittorrent"
-    SEED_STATES = {"uploading", "stalledUP", "queuedUP", "forcedUP", "pausedUP", "stoppedUP"}
+    SEED_STATES = {"uploading", "stalledUP", "forcedUP"}          # seuls états qui annoncent au tracker
+    IDLE_STATES = {"queuedUP", "pausedUP", "stoppedUP"}           # complet, mais rien d'annoncé
+    NO_LIMIT = {"ratioLimit": "-1", "seedingTimeLimit": "-1", "inactiveSeedingTimeLimit": "-1"}
     LABELS = {"checkingUP": "Vérification", "checkingDL": "Vérification", "checkingResumeData": "Vérification",
               "uploading": "En seed", "stalledUP": "En seed", "queuedUP": "En file (seed)", "forcedUP": "En seed",
               "pausedUP": "Terminé, en pause", "stoppedUP": "Terminé, arrêté", "downloading": "Données incomplètes",
@@ -98,8 +115,10 @@ class QBittorrent(_Base):
         return f"qBittorrent {v} connecté"
 
     def add(self, torrent, save_path, infohash):
+        # contentLayout=Original : sans lui, le réglage « Créer un sous-dossier » ou « Ne pas créer de
+        # sous-dossier » du client déplace l'emplacement attendu et la vérification échoue.
         data = {"savepath": str(save_path), "skip_checking": "false", "paused": "false", "stopped": "false",
-                "autoTMM": "false"}
+                "autoTMM": "false", "contentLayout": "Original", "root_folder": "true", **self.NO_LIMIT}
         if self.label:
             data["category"] = self.label
         # Octets et non fichier ouvert : après un 403 (session expirée), _api rejoue la
@@ -127,10 +146,23 @@ class QBittorrent(_Base):
             return None
         t = items[0]
         state = t.get("state", "")
-        seeding = state in self.SEED_STATES and float(t.get("progress", 0)) >= 1
+        done = float(t.get("progress", 0)) >= 1
         err = "Fichiers introuvables à l'emplacement indiqué." if state == "missingFiles" else \
             ("Erreur du client." if state == "error" else "")
-        return Status(self.LABELS.get(state, state), float(t.get("progress", 0)), seeding, err)
+        return Status(self.LABELS.get(state, state), float(t.get("progress", 0)), state in self.SEED_STATES and done,
+                      err, state in self.IDLE_STATES and done)
+
+    def ensure_active(self, infohash):
+        h = {"hashes": infohash.lower()}
+        try:
+            self._api("POST", "/api/v2/torrents/start", data=h)          # qBittorrent 5
+        except ClientError:
+            self._api("POST", "/api/v2/torrents/resume", data=h)         # qBittorrent 4
+        self._api("POST", "/api/v2/torrents/setForceStart", data={**h, "value": "true"})
+        self._api("POST", "/api/v2/torrents/setShareLimits", data={**h, **self.NO_LIMIT})
+
+    def recheck(self, infohash):
+        self._api("POST", "/api/v2/torrents/recheck", data={"hashes": infohash.lower()})
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -178,7 +210,8 @@ class Transmission(_Base):
                 "paused": False}
         if self.label:
             args["labels"] = [self.label]
-        self._rpc("torrent-add", args)
+        if "torrent-duplicate" in self._rpc("torrent-add", args):
+            raise ClientError("Transmission : torrent déjà présent.")
 
     def status(self, infohash):
         ts = self._rpc("torrent-get", {"ids": [infohash.lower()],
@@ -189,14 +222,25 @@ class Transmission(_Base):
         t = ts[0]
         st = int(t.get("status", 0))
         progress = float(t.get("recheckProgress") if st == 2 else t.get("percentDone", 0))
-        return Status(self.STATUS.get(st, str(st)), progress, st in (5, 6) and float(t.get("percentDone", 0)) >= 1,
-                      t.get("errorString") or "" if t.get("error") else "")
+        done = float(t.get("percentDone", 0)) >= 1
+        return Status(self.STATUS.get(st, str(st)), progress, st == 6 and done,     # 5 : en file, n'annonce rien
+                      t.get("errorString") or "" if t.get("error") else "", st in (0, 5) and done)
+
+    def ensure_active(self, infohash):
+        ids = [infohash.lower()]
+        self._rpc("torrent-start-now", {"ids": ids})                   # hors file d'attente
+        self._rpc("torrent-set", {"ids": ids, "seedRatioMode": 2, "seedIdleMode": 2})     # 2 : illimité
+
+    def recheck(self, infohash):
+        self._rpc("torrent-verify", {"ids": [infohash.lower()]})
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 
 class Deluge(_Base):
     name = "Deluge"
+    # auto_managed False : hors file d'attente (sinon « Queued » sans jamais seeder) ; pas d'arrêt au ratio
+    ACTIVE = {"auto_managed": False, "stop_at_ratio": False, "remove_at_ratio": False}
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
@@ -238,8 +282,13 @@ class Deluge(_Base):
 
     def add(self, torrent, save_path, infohash):
         self._connect()
-        self._call("core.add_torrent_file", torrent.name, base64.b64encode(torrent.read_bytes()).decode(),
-                   {"download_location": str(save_path), "add_paused": False})
+        try:
+            self._call("core.add_torrent_file", torrent.name, base64.b64encode(torrent.read_bytes()).decode(),
+                       {"download_location": str(save_path), "add_paused": False, **self.ACTIVE})
+        except ClientError as e:
+            if "already" in str(e).lower():
+                raise ClientError("Deluge : torrent déjà présent.") from e
+            raise
         if self.label:
             try:
                 self._call("label.set_torrent", infohash.lower(), self.label.lower())
@@ -254,8 +303,22 @@ class Deluge(_Base):
         state = t.get("state", "")
         labels = {"Checking": "Vérification", "Seeding": "En seed", "Queued": "En file", "Paused": "En pause",
                   "Downloading": "Données incomplètes", "Error": "Erreur"}
+        done = float(t.get("progress", 0)) >= 100
         return Status(labels.get(state, state), float(t.get("progress", 0)) / 100, state == "Seeding",
-                      t.get("message", "") if state == "Error" else "")
+                      t.get("message", "") if state == "Error" else "", state in ("Queued", "Paused") and done)
+
+    def ensure_active(self, infohash):
+        self._connect()
+        ih = infohash.lower()
+        self._call("core.set_torrent_options", [ih], self.ACTIVE)
+        try:
+            self._call("core.resume_torrents", [ih])                # Deluge 2
+        except ClientError:
+            self._call("core.resume_torrent", [ih])                 # Deluge 1.3
+
+    def recheck(self, infohash):
+        self._connect()
+        self._call("core.force_recheck", [infohash.lower()])
 
 
 CLASSES = {"qbittorrent": QBittorrent, "transmission": Transmission, "deluge": Deluge}
@@ -297,11 +360,31 @@ def make(cfg) -> Optional[_Base]:
                          cfg.get("client_password"), cfg.get("client_label"))
 
 
+CHECKING = ("Vérification", "En attente de vérification")
+
+
+def add_or_recheck(client, torrent: Path, save_path, infohash: str):
+    """Ajoute le torrent. S'il est déjà dans le client mais incomplet (ajouté avant la fin du transfert des
+    fichiers vers une seedbox, par exemple), relance la vérification : sinon le client ne voit pas les fichiers
+    arrivés entre-temps."""
+    try:
+        client.add(torrent, save_path, infohash)
+    except ClientError as e:
+        if "déjà présent" not in str(e):
+            raise
+        st = client.status(infohash)
+        if st is not None and not st.seeding and st.progress < 1 and st.state not in CHECKING:
+            client.recheck(infohash)
+
+
 def wait_seeding(client, infohash: str, on_status: Callable[[Status], None], cancel=None,
-                 timeout: float = 6 * 3600, interval: float = 3.0) -> Status:
-    """Interroge le client jusqu'au seed (ou erreur, annulation, délai dépassé)."""
+                 timeout: float = 6 * 3600, interval: float = 3.0, idle_grace: float = 60.0) -> Status:
+    """Interroge le client jusqu'au seed (ou erreur, annulation, délai dépassé). Dès que le torrent apparaît :
+    démarrage forcé et aucune limite de seed (ensure_active)."""
     start = time.monotonic()
     missing = 0
+    activated = False
+    idle_since = None
     while True:
         st = client.status(infohash)
         if st is None:
@@ -309,11 +392,22 @@ def wait_seeding(client, infohash: str, on_status: Callable[[Status], None], can
             if missing > 10:
                 raise ClientError("Le torrent n'apparaît pas dans le client.")
         else:
+            if not activated:
+                activated = True
+                try:
+                    client.ensure_active(infohash)
+                except ClientError as e:           # version ancienne du client : le suivi continue
+                    logging.info("%s : démarrage forcé ou limites de seed non appliqués : %s", client.name, e)
             on_status(st)
             if st.seeding:
                 return st
             if st.error:
                 raise ClientError(st.error)
+            now = time.monotonic()
+            idle_since = (idle_since or now) if st.idle else None
+            if idle_since is not None and now - idle_since > idle_grace:
+                raise ClientError(f"{client.name} : le torrent est complet mais ne seed pas ({st.state}). "
+                                  "Démarre-le en « démarrage forcé » dans le client.")
             if st.state in ("Données incomplètes",) and st.progress < 1 and time.monotonic() - start > 60:
                 raise ClientError("Le client ne trouve pas toutes les données : vérifie l'emplacement de la source.")
         if cancel is not None and cancel.wait(interval):
@@ -332,7 +426,8 @@ ENABLE_HELP = {
     "qbittorrent": "qBittorrent : Outils › Options › Interface web › cocher « Interface utilisateur Web » "
                    "(port 8080 par défaut), puis renseigner un identifiant et un mot de passe.",
     "transmission": "Transmission : Édition › Préférences › Distant › « Autoriser l'accès distant » (port 9091).",
-    "deluge": "Deluge : lancer deluge-web (port 8112) ; seul le mot de passe de l'interface web est demandé.",
+    "deluge": "Deluge : Édition › Préférences › Modules › cocher WebUi (port 8112) ; seul le mot de passe de "
+              "l'interface web est demandé (par défaut : deluge, à changer).",
 }
 
 

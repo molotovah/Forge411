@@ -2,6 +2,26 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [SemVer](https://semver.org/lang/fr/).
 
+## [2.3.0] - 2026-11-26
+
+### Ajouté
+- Interface au style de C411 : boutons, encadrés, pastilles, bandeaux, notifications et bulle de la visite guidée aux coins arrondis (anticrénelés).
+- Mise à jour disponible : bandeau bleu en haut de la fenêtre avec la principale nouveauté (Voir et installer, Plus tard, Ignorer cette version), notification en bas à droite et clignotement du bouton dans la barre des tâches quand Forge411 n'est pas au premier plan.
+- README : guide pas à pas du client torrent pour trois cas (client sur ce PC, NAS ou Docker, seedbox dans le cloud) et tableau des messages d'erreur avec leur solution.
+
+### Modifié
+- Torrent ajouté au client : disposition d'origine des fichiers imposée (qBittorrent), démarrage forcé hors file d'attente et aucune limite de ratio ni de durée de seed, quels que soient les réglages du client.
+- Création du torrent plus rapide : lecture du disque et calcul des empreintes en parallèle, sans copie des données.
+- Étape Publication : les vérifications ne sont plus recalculées à chaque touche frappée dans la justification, et la liste n'est reconstruite que si elle change.
+- Molette : un seul gestionnaire pour toute l'application. Chaque fenêtre ouverte en ajoutait un, jamais retiré, qui ralentissait le défilement au fil de la session.
+
+### Corrigé
+- Un torrent en file d'attente, en pause ou arrêté n'est plus compté « En seed » : il n'annonce rien au tracker. Forge411 le démarre, et l'indique s'il reste inactif.
+- qBittorrent : avec le réglage « Créer un sous-dossier » ou « Ne pas créer de sous-dossier », la vérification cherchait les fichiers au mauvais endroit.
+- Deluge : un torrent mis en file d'attente faisait attendre Forge411 jusqu'à 6 h.
+- Torrent déjà présent dans le client mais incomplet (ajouté avant la fin d'un transfert vers une seedbox) : la vérification est relancée. Deluge et Transmission signalent aussi le doublon.
+- La notification « Validé sur C411 » ne s'affichait pas quand elle indiquait que la place était libre pour un nouvel upload.
+
 ## [2.2.0] - 2026-11-26
 
 ### Ajouté

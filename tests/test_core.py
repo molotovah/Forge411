@@ -116,6 +116,21 @@ class TorrentTests(unittest.TestCase):
             names = [b"/".join(f[b"path"]).decode() for f in info[b"files"]]
             self.assertEqual(names, ["Serie.S01E01.mkv", "Serie.S01E02.mkv", "Serie.S01E03.mkv", "Subs/fr.srt"])
 
+    def test_piece_boundaries(self):
+        """Lecture et calcul en parallèle : pièces exactement pleines, fichier vide entre deux autres, plus de
+        pièces que de tampons (ordre des empreintes conservé)."""
+        M = torrent.MiB
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d) / "Pack"
+            root.mkdir()
+            (root / "a.bin").write_bytes(bytes(range(256)) * (4 * M // 256))      # 4 pièces pleines
+            (root / "b.bin").write_bytes(b"")
+            (root / "c.bin").write_bytes(b"\x07" * (2 * M + 123))                # coupe une pièce
+            self._check(root)
+            one = Path(d) / "Exact.bin"
+            one.write_bytes(b"\x01" * (3 * M))
+            self.assertEqual(len(self._check(one)[b"pieces"]), 3 * 20)
+
     def test_cancel(self):
         ev = threading.Event()
         ev.set()
@@ -674,6 +689,162 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(CL.make(cfg).url, "http://localhost:8112")
 
 
+class ClientSeedOptionsTests(unittest.TestCase):
+    """Torrent ajouté au client : disposition d'origine, démarrage forcé, aucune limite de seed, et « en seed »
+    seulement quand le client annonce vraiment au tracker."""
+
+    def _qbit(self, handler):
+        from unittest import mock
+        from forge411 import clients as CL
+        q = CL.QBittorrent("http://h:8080", "u", "p")
+        return q, mock.patch.object(q.s, "request", side_effect=handler)
+
+    def test_qbittorrent_add_options(self):
+        sent = {}
+
+        def req(method, url, **kw):
+            if url.endswith("/torrents/add"):
+                sent.update(kw.get("data") or {})
+            return FakeResp(text="Ok.")
+        q, patch = self._qbit(req)
+        with tempfile.TemporaryDirectory() as d, patch:
+            t = Path(d) / "a.torrent"
+            t.write_bytes(b"d4:infod4:name1:aee")
+            q.add(t, Path(d), "ABC")
+        self.assertEqual(sent["contentLayout"], "Original")       # pas de sous-dossier ajouté ou retiré
+        self.assertEqual(sent["skip_checking"], "false")          # données toujours vérifiées
+        for k in ("ratioLimit", "seedingTimeLimit", "inactiveSeedingTimeLimit"):
+            self.assertEqual(sent[k], "-1")                         # -1 : illimité (-2 : réglage global)
+
+    def test_qbittorrent_queued_or_stopped_is_not_seeding(self):
+        from forge411 import clients as CL
+        for state, seeding, idle in (("queuedUP", False, True), ("stoppedUP", False, True),
+                                     ("pausedUP", False, True), ("stalledUP", True, False),
+                                     ("forcedUP", True, False), ("queuedDL", False, False)):
+            q, patch = self._qbit(lambda m, u, **kw: FakeResp(json_data=[{"state": state, "progress": 1}]))
+            with patch:
+                st = q.status("abc")
+            self.assertEqual((st.seeding, st.idle), (seeding, idle), state)
+        self.assertNotIn("queuedUP", CL.QBittorrent.SEED_STATES)
+
+    def test_qbittorrent_force_start_and_limits(self):
+        calls = []
+
+        def req(method, url, **kw):
+            calls.append((url.rsplit("/", 1)[-1], kw.get("data") or {}))
+            return FakeResp(404 if url.endswith("/torrents/start") else 200, text="Ok.")    # qBittorrent 4
+        q, patch = self._qbit(req)
+        with patch:
+            q.ensure_active("ABC")
+        names = [c[0] for c in calls]
+        self.assertIn("resume", names)
+        force = dict(calls)["setForceStart"]
+        self.assertEqual((force["hashes"], force["value"]), ("abc", "true"))
+        self.assertEqual(dict(calls)["setShareLimits"]["ratioLimit"], "-1")
+
+    def test_transmission_seed_wait_is_not_seeding(self):
+        from unittest import mock
+        from forge411 import clients as CL
+        t = CL.Transmission("http://h:9091")
+        sent = []
+
+        def rpc(method, args=None):
+            sent.append((method, args))
+            return {"torrents": [{"status": 5, "percentDone": 1, "error": 0}]}
+        with mock.patch.object(t, "_rpc", side_effect=rpc):
+            st = t.status("abc")
+            t.ensure_active("ABC")
+        self.assertFalse(st.seeding)
+        self.assertTrue(st.idle)
+        self.assertEqual(sent[1], ("torrent-start-now", {"ids": ["abc"]}))
+        self.assertEqual(sent[2][1]["seedRatioMode"], 2)
+
+    def test_deluge_not_auto_managed(self):
+        from unittest import mock
+        from forge411 import clients as CL
+        d = CL.Deluge("http://h:8112", "", "pw")
+        d._ready = True
+        sent = []
+
+        def call(method, *params):
+            sent.append((method, params))
+            if method == "core.get_torrent_status":
+                return {"state": "Queued", "progress": 100.0}
+            if method == "core.resume_torrents":
+                raise CL.ClientError("Deluge : méthode inconnue")          # Deluge 1.3
+            return True
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(d, "_call", side_effect=call):
+            tor = Path(tmp) / "a.torrent"
+            tor.write_bytes(b"d4:infod4:name1:aee")
+            d.add(tor, Path(tmp), "ABC")
+            st = d.status("abc")
+            d.ensure_active("ABC")
+        opts = sent[0][1][2]
+        self.assertEqual((opts["auto_managed"], opts["stop_at_ratio"], opts["remove_at_ratio"]), (False, False, False))
+        self.assertTrue(st.idle)
+        self.assertFalse(st.seeding)
+        self.assertEqual(sent[-1], ("core.resume_torrent", (["abc"],)))
+
+    def test_readd_incomplete_torrent_rechecks(self):
+        """Seedbox : torrent ajouté avant la fin du transfert, puis ajouté à nouveau une fois les fichiers
+        arrivés. Déjà présent et incomplet : le client doit revérifier, sinon il reste incomplet."""
+        from forge411 import clients as CL
+
+        class Fake:
+            name = "Client"
+
+            def __init__(self, st):
+                self.st, self.rechecked = st, 0
+
+            def add(self, *a):
+                raise CL.ClientError("Client : torrent déjà présent.")
+
+            def status(self, ih):
+                return self.st
+
+            def recheck(self, ih):
+                self.rechecked += 1
+        for st, expected in ((CL.Status("Données incomplètes", 0.4), 1), (CL.Status("Vérification", 0.4), 0),
+                             (CL.Status("En seed", 1.0, True), 0)):
+            c = Fake(st)
+            CL.add_or_recheck(c, Path("a.torrent"), "/dl", "abc")
+            self.assertEqual(c.rechecked, expected, st.state)
+
+    def test_duplicates_reported_as_already_present(self):
+        from unittest import mock
+        from forge411 import clients as CL
+        t = CL.Transmission("http://h:9091")
+        d = CL.Deluge("http://h:8112", "", "pw")
+        d._ready = True
+        with tempfile.TemporaryDirectory() as tmp:
+            tor = Path(tmp) / "a.torrent"
+            tor.write_bytes(b"d4:infod4:name1:aee")
+            with mock.patch.object(t, "_rpc", return_value={"torrent-duplicate": {"hashString": "abc"}}):
+                with self.assertRaisesRegex(CL.ClientError, "déjà présent"):
+                    t.add(tor, Path(tmp), "abc")
+            with mock.patch.object(d, "_call", side_effect=CL.ClientError("Deluge : Torrent already in session (abc).")):
+                with self.assertRaisesRegex(CL.ClientError, "déjà présent"):
+                    d.add(tor, Path(tmp), "abc")
+
+    def test_wait_activates_once_and_reports_idle(self):
+        from forge411 import clients as CL
+
+        class Fake:
+            name = "Client"
+            activated = 0
+
+            def status(self, ih):
+                return CL.Status("En file (seed)", 1.0, False, "", True)
+
+            def ensure_active(self, ih):
+                self.activated += 1
+        c = Fake()
+        with self.assertRaises(CL.ClientError) as e:
+            CL.wait_seeding(c, "abc", lambda st: None, interval=0, idle_grace=-1)
+        self.assertIn("ne seed pas", str(e.exception))
+        self.assertEqual(c.activated, 1)
+
+
 class CatalogTests(unittest.TestCase):
     def test_family_and_compare(self):
         from forge411 import catalog as C
@@ -1139,6 +1310,15 @@ class UpdateNotesTests(unittest.TestCase):
         self.assertEqual([v for v, _, _ in changelog_sections(text, "2.1.0")], ["2.2.0", "2.1.1"])
         self.assertEqual([v for v, _, _ in changelog_sections(text, "2.1.0", "2.1.1")], ["2.1.1"])
         self.assertEqual(changelog_sections(text, "2.1.0")[0][2], "### Ajouté\n- A")
+
+    def test_summary_for_banner(self):
+        """Bandeau et notification de mise à jour : première nouveauté, Markdown retiré, coupée à un mot."""
+        from forge411.updater import summary
+        notes = "### Ajouté\n- **Publication** : vitesse et `temps restant` du hachage.\n- Autre chose."
+        self.assertEqual(summary(notes), "Publication : vitesse et temps restant du hachage.")
+        long = summary("- " + "mot " * 80, limit=40)
+        self.assertTrue(long.endswith("…") and len(long) <= 40 and not long[:-1].endswith(" "))
+        self.assertEqual(summary(""), "")
 
     def test_theme_dark_by_default(self):
         from forge411.config import Config

@@ -54,6 +54,36 @@ class UiRulesTests(unittest.TestCase):
                             problems.append(f"{f.name}:{call.lineno} {text!r} {sorted(odd)}")
         self.assertEqual(problems, [])
 
+    def test_label_helper_keywords(self):
+        """label() fixe déjà anchor et justify : les repasser lève TypeError (notification « Validé sur C411 »
+        jamais affichée quand elle portait une indication)."""
+        bad = []
+        for f in sorted((PKG / "ui").glob("*.py")):
+            for call in _calls(ast.parse(f.read_text(encoding="utf-8")), "label"):
+                if isinstance(call.func, ast.Name) and {k.arg for k in call.keywords} & {"anchor", "justify"}:
+                    bad.append(f"{f.name}:{call.lineno}")
+        self.assertEqual(bad, [])
+
+    def test_rounded_card_layout(self):
+        """Encadré arrondi (Canvas + fenêtre intégrée) : contenu jamais affiché sans ajustement initial (le canevas
+        masque une fenêtre hors de sa zone visible), et largeur qui boucle avec les textes repliés si elle peut
+        rétrécir (fenêtre Profil figée)."""
+        src = (PKG / "ui" / "widgets.py").read_text(encoding="utf-8")
+        card = src[src.index("class Card(tk.Canvas)"):src.index("class ScrollFrame")]
+        self.assertIn("self.after_idle(self._fit)", card)
+        self.assertIn('if w > int(self.cget("width")):', card)
+        self.assertIn("int(self._r * 0.3) + 1", card)          # le contenu ne recouvre pas l'arrondi
+
+    def test_single_global_wheel_handler(self):
+        """Un bind_all par zone défilante s'accumulait à chaque fenêtre ouverte (molette de plus en plus lente)."""
+        calls = []
+        for f in sorted((PKG / "ui").glob("*.py")):
+            for call in _calls(ast.parse(f.read_text(encoding="utf-8")), "bind_all"):
+                calls.append(f"{f.name}:{call.lineno}")
+        self.assertEqual(len(calls), 1, calls)
+        src = (PKG / "ui" / "widgets.py").read_text(encoding="utf-8")
+        self.assertIn('if not getattr(root, "_forge_wheel", False):', src)
+
     def test_tables_use_shared_style(self):
         """Un ttk.Treeview sans style_tree garde la bordure claire et les en-têtes du thème par défaut."""
         bad = [f.name for f in sorted((PKG / "ui").glob("*.py"))
@@ -84,7 +114,8 @@ class UiRulesTests(unittest.TestCase):
         """Un survol actif au moment d'ouvrir une fenêtre modale restait affiché à sa fermeture."""
         widgets = (PKG / "ui" / "widgets.py").read_text(encoding="utf-8")
         app = (PKG / "ui" / "app.py").read_text(encoding="utf-8")
-        self.assertIn("self.configure(bg=self._bg)", widgets[widgets.index("def _click"):])
+        click = widgets[widgets.index("def _click"):]
+        self.assertLess(click.index("self._set_hover(False)"), click.index("self.command()"))
         self.assertIn("hover(row.winfo_containing(x, y) in parts)", app)
 
 

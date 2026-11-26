@@ -23,7 +23,7 @@ from . import theme as T
 from .dialogs import HistoryDialog, SettingsDialog, UpdateDialog
 from .steps import IdentifyStep, NameStep, NfoStep, PresentStep, PublishStep, SourceStep
 from .tour import Tour
-from .widgets import UI, Btn, Tooltip, label, run_bg, wrap_name
+from .widgets import UI, Btn, Card, Tooltip, autowrap, label, run_bg, wrap_name
 
 STEPS = [SourceStep, IdentifyStep, NameStep, NfoStep, PresentStep, PublishStep]
 STEP_HELP = ["Choisis le fichier ou le dossier ; le type de contenu est reconnu.",
@@ -174,29 +174,34 @@ class App(tk.Tk):
         nxt = "Plus aucun upload en attente : tu peux publier le suivant (un brouillon, par exemple)." if free else ""
         self._toast(f"Validé sur C411{more}", names[0], nxt)
 
-    def _toast(self, title, text, hint=""):
-        """Notification discrète en bas à droite de la fenêtre, avec accès à l'historique (fermée après 30 s)."""
+    def _toast(self, title, text, hint="", tone="success", action=None):
+        """Notification discrète en bas à droite de la fenêtre (fermée après 30 s). tone : success (validation,
+        bouton Historique par défaut) ou info (mise à jour). action : (libellé, commande) du bouton."""
         old = getattr(self, "_toast_box", None)
         if old is not None and old.winfo_exists():
             old.destroy()
-        box = self._toast_box = tk.Frame(self, bg=T.SUCCESS_SOFT, highlightthickness=1, highlightbackground=T.SUCCESS)
-        head = tk.Frame(box, bg=T.SUCCESS_SOFT)
+        bg, fg, icon = (T.SUCCESS_SOFT, T.SUCCESS, "✓") if tone == "success" else (T.SURFACE2, T.INFO, "↑")
+        card = self._toast_box = Card(self, padding=0, bg=bg, border=fg)
+        box = card.body
+        head = tk.Frame(box, bg=bg)
         head.pack(fill="x", padx=14, pady=(10, 0))
-        label(head, "✓  " + title, fg=T.SUCCESS, font=T.F_UI_B, bg=T.SUCCESS_SOFT).pack(side="left")
-        close = label(head, "✕", fg=T.MUTED, bg=T.SUCCESS_SOFT, cursor="hand2")
+        label(head, f"{icon}  " + title, fg=fg, font=T.F_UI_B, bg=bg).pack(side="left")
+        close = label(head, "✕", fg=T.MUTED, bg=bg, cursor="hand2")
         close.pack(side="right", padx=(12, 0))
-        close.bind("<Button-1>", lambda e: box.destroy())
-        name = label(box, "", fg=T.TEXT, font=T.F_SMALL, bg=T.SUCCESS_SOFT, width=52)
+        close.bind("<Button-1>", lambda e: card.destroy())
+        name = label(box, "", fg=T.TEXT, font=T.F_SMALL, bg=bg, width=52)
         wrap_name(name, text).pack(fill="x", padx=14, pady=(4, 6))       # nom pointé : coupé après les points
         if hint:
-            label(box, hint, fg=T.SUCCESS, font=T.F_SMALL_B, bg=T.SUCCESS_SOFT, wraplength=T.px(self, 360),
-                  justify="left", anchor="w").pack(fill="x", padx=14, pady=(0, 6))
-        row = tk.Frame(box, bg=T.SUCCESS_SOFT)
+            label(box, hint, fg=fg, font=T.F_SMALL_B, bg=bg, wraplength=T.px(self, 360)).pack(
+                fill="x", padx=14, pady=(0, 6))
+        row = tk.Frame(box, bg=bg)
         row.pack(fill="x", padx=14, pady=(0, 10))
-        Btn(row, "Voir l'historique", lambda: (box.destroy(), self.open_history()), small=True).pack(side="left")
-        box.place(relx=1.0, rely=1.0, x=-T.px(self, 24), y=-T.px(self, 70), anchor="se")
-        box.lift()
-        self.after(30000, lambda: box.winfo_exists() and box.destroy())
+        text_btn, cmd = action or ("Voir l'historique", self.open_history)
+        Btn(row, text_btn, lambda: (card.destroy(), cmd()), small=True,
+            kind="primary" if tone != "success" else "secondary").pack(side="left")
+        card.place(relx=1.0, rely=1.0, x=-T.px(self, 24), y=-T.px(self, 70), anchor="se")
+        tk.Misc.lift(card)                  # Canvas.lift agit sur ses éléments, pas sur le widget
+        self.after(30000, lambda: card.winfo_exists() and card.destroy())
 
     def _sweep_captures(self):
         """Supprime les captures et NFO des torrents validés par C411 (images hébergées, NFO en ligne avec le
@@ -225,12 +230,12 @@ class App(tk.Tk):
         tk.Label(side, text="Du fichier au torrent en seed", bg=T.SIDEBAR, fg=T.FAINT,
                  font=T.F_SMALL, anchor="w").pack(fill="x", padx=24, pady=(0, 16))
         # Résumé du profil C411 (affiché quand le profil a pu être lu)
-        self.chip = tk.Frame(side, bg=T.SURFACE, cursor="hand2", highlightthickness=1, highlightbackground=T.BORDER)
-        self.chip_name = tk.Label(self.chip, bg=T.SURFACE, fg=T.TEXT, font=T.F_UI_B, anchor="w")
+        self.chip = Card(side, padding=0, cursor="hand2")
+        self.chip_name = tk.Label(self.chip.body, bg=T.SURFACE, fg=T.TEXT, font=T.F_UI_B, anchor="w")
         self.chip_name.pack(fill="x", padx=12, pady=(8, 0))
-        self.chip_meta = tk.Label(self.chip, bg=T.SURFACE, fg=T.MUTED, font=T.F_SMALL, anchor="w")
+        self.chip_meta = tk.Label(self.chip.body, bg=T.SURFACE, fg=T.MUTED, font=T.F_SMALL, anchor="w")
         self.chip_meta.pack(fill="x", padx=12, pady=(0, 8))
-        for w in (self.chip, self.chip_name, self.chip_meta):
+        for w in (self.chip, self.chip.body, self.chip_name, self.chip_meta):
             w.bind("<Button-1>", lambda e: self.open_profile())
         Tooltip(self.chip, "Ton profil C411 : niveau, classe, volumes, Zen, freeleech.")
         self.chip_spacer = tk.Frame(side, bg=T.SIDEBAR, height=8)
@@ -254,6 +259,7 @@ class App(tk.Tk):
         bottom = tk.Frame(side, bg=T.SIDEBAR)
         bottom.pack(side="bottom", fill="x", padx=12, pady=12)
         self.update_rel = None
+        self._upd_later = self._upd_notified = ""       # version reportée (« Plus tard ») / déjà notifiée
         self.side_buttons = {}
         menu = (
             ("Créer", (
@@ -319,17 +325,27 @@ class App(tk.Tk):
         self.h_sub.pack(fill="x", pady=(2, 0))
         self.h_sub.bind("<Configure>", lambda e: self.h_sub.configure(wraplength=max(e.width - 4, 200)))
         # Pastille « nouvelle version » en haut à droite (cliquable)
-        self.upd_chip = tk.Label(head, text="", bg=T.ACCENT_SOFT, fg=T.ACCENT, font=T.F_SMALL_B, cursor="hand2",
-                                 padx=12, pady=5)
-        self.upd_chip.bind("<Button-1>", lambda e: self.open_update())
-        self.upd_chip.bind("<Enter>", lambda e: self.upd_chip.configure(bg=T.ACCENT, fg=T.ON_ACCENT))
-        self.upd_chip.bind("<Leave>", lambda e: self.upd_chip.configure(bg=T.ACCENT_SOFT, fg=T.ACCENT))
+        self.upd_chip = Btn(head, "", self.open_update, kind="soft", small=True)
         Tooltip(self.upd_chip, "Une nouvelle version est disponible : clique pour lire les nouveautés avant d'installer.")
+        # Bandeau « nouvelle version » : couleur à part (bleu), au-dessus de tout le reste
+        self.upd_banner = Card(main, padding=0, border=T.INFO)
+        ub = self.upd_banner.body
+        btns = tk.Frame(ub, bg=T.SURFACE)
+        btns.pack(side="right", padx=(8, 14), pady=10)
+        Btn(btns, "Ignorer cette version", self._skip_update, kind="ghost", small=True).pack(side="right")
+        Btn(btns, "Plus tard", self._update_later, kind="ghost", small=True).pack(side="right", padx=(0, 4))
+        Btn(btns, "Voir et installer", self.open_update, kind="primary", small=True).pack(side="right", padx=(0, 8))
+        txt = tk.Frame(ub, bg=T.SURFACE)
+        txt.pack(side="left", fill="x", expand=True, padx=(14, 0), pady=10)
+        self.upd_title = label(txt, "", fg=T.INFO, font=T.F_UI_B, bg=T.SURFACE)
+        self.upd_title.pack(fill="x")
+        self.upd_text = autowrap(label(txt, "", fg=T.MUTED, font=T.F_SMALL, bg=T.SURFACE))
+        self.upd_text.pack(fill="x")
         # Bandeau du mode correction : points de la Team Pending pour l'étape affichée
-        self.fix_banner = tk.Frame(main, bg=T.SURFACE, highlightthickness=1, highlightbackground=T.WARNING)
-        self.fix_title = label(self.fix_banner, "", fg=T.WARNING, font=T.F_UI_B, bg=T.SURFACE)
+        self.fix_banner = Card(main, padding=0, border=T.WARNING)
+        self.fix_title = label(self.fix_banner.body, "", fg=T.WARNING, font=T.F_UI_B, bg=T.SURFACE)
         self.fix_title.pack(fill="x", padx=14, pady=(10, 2))
-        self.fix_text = label(self.fix_banner, "", bg=T.SURFACE)
+        self.fix_text = label(self.fix_banner.body, "", bg=T.SURFACE)
         self.fix_text.pack(fill="x", padx=14, pady=(0, 10))
         self.fix_text.bind("<Configure>", lambda e: self.fix_text.configure(wraplength=max(e.width - 4, 200)))
         self._main = main
@@ -713,7 +729,7 @@ class App(tk.Tk):
         def found(rel):
             if manual:
                 self.status.configure(text="")
-            self.set_update(rel)
+            self.set_update(rel, notify=not manual)       # manuel : la fenêtre des nouveautés s'ouvre
             if manual:
                 if rel is None:
                     messagebox.showinfo("Mises à jour", f"Forge411 {__version__} est à jour.", parent=self)
@@ -730,7 +746,7 @@ class App(tk.Tk):
         if not manual:
             self.after(self.UPDATE_EVERY_MS, lambda: self.cfg.get("check_updates") and self.check_updates(False))
 
-    def set_update(self, rel):
+    def set_update(self, rel, notify: bool = True):
         """Pastille sur ⟳ et bandeau dans la barre latérale si une version plus récente existe."""
         self.update_rel = rel
         skipped = rel is not None and rel.version == self.cfg.get("skip_version")
@@ -738,6 +754,7 @@ class App(tk.Tk):
         tip = self.side_tips["update"]
         if rel is None:
             self.upd_chip.place_forget()
+            self.upd_banner.pack_forget()
             self.upd_dot.place_forget()
             upd.configure(fg=T.FAINT)
             tip.text = "Mises à jour : cherche une nouvelle version sur GitHub."
@@ -747,9 +764,33 @@ class App(tk.Tk):
         tip.text = f"Forge411 {rel.version} est disponible : clique pour lire les nouveautés."
         if skipped:
             self.upd_chip.place_forget()
+            self.upd_banner.pack_forget()
             return
-        self.upd_chip.configure(text=f"↑  Forge411 {rel.version} disponible")
+        self.upd_chip.set_text(f"↑  Forge411 {rel.version} disponible")
         self.upd_chip.place(relx=1.0, rely=0.0, anchor="ne")
+        if rel.version != self._upd_later:
+            self.upd_title.configure(text=f"↑  Forge411 {rel.version} est disponible (tu as la {__version__})")
+            first = updater.summary(rel.notes)
+            self.upd_text.configure(text=f"Nouveauté : {first}" if first else "Lis les nouveautés avant d'installer.")
+            if not self.upd_banner.winfo_ismapped():
+                self.upd_banner.pack(fill="x", padx=32, pady=(0, 12),
+                                     before=self.fix_banner if self.fix_banner.winfo_ismapped() else self.body)
+        if notify and self._upd_notified != rel.version:     # une fois par version et par lancement
+            self._upd_notified = rel.version
+            self._toast("Mise à jour disponible", f"Forge411 {rel.version}", updater.summary(rel.notes),
+                        tone="info", action=("Voir et installer", self.open_update))
+            T.flash_taskbar(self)
+
+    def _update_later(self):
+        """Masque le bandeau jusqu'au prochain lancement (la pastille reste)."""
+        if self.update_rel is not None:
+            self._upd_later = self.update_rel.version
+        self.upd_banner.pack_forget()
+
+    def _skip_update(self):
+        if self.update_rel is not None:
+            self.cfg.update({"skip_version": self.update_rel.version})
+            self.set_update(self.update_rel)
 
     def open_update(self, force: bool = False):
         rel = self.update_rel
@@ -761,7 +802,7 @@ class App(tk.Tk):
         UpdateDialog(self, rel).show()
         try:
             if self.winfo_exists():                 # « Installer » ferme Forge411 pendant la fenêtre
-                self.set_update(self.update_rel)    # « Ignorer cette version » masque le bandeau
+                self.set_update(self.update_rel, notify=False)    # « Ignorer cette version » masque le bandeau
         except tk.TclError:
             pass
 

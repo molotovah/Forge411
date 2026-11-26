@@ -135,9 +135,9 @@ class SourceStep(Step):
             ws.append(w)
 
         def hover(on):
-            for w in ws[1:]:
+            for w in ws[2:]:
                 w.configure(bg=T.SURFACE2 if on else T.SURFACE)
-            card.configure(highlightbackground=T.ACCENT if on else T.BORDER)
+            card.set_colors(T.SURFACE2 if on else T.SURFACE, T.ACCENT if on else T.BORDER)
         for w in ws:
             w.configure(cursor="hand2")
             w.bind("<Enter>", lambda e: hover(True))
@@ -446,14 +446,13 @@ class IdentifyStep(Step):
         for m in s.matches:
             chosen = bool(s.ident and s.ident.provider and s.ident.id == m.id.split(":", 1)[-1])
             bg = T.SURFACE2 if chosen else T.SURFACE
-            card = tk.Frame(inner, bg=bg, highlightbackground=T.ACCENT if chosen else T.BORDER,
-                            highlightthickness=1, cursor="hand2")
+            card = Card(inner, padding=10, bg=bg, border=T.ACCENT if chosen else T.BORDER, cursor="hand2")
             card.pack(fill="x", pady=(0, 8))
-            img = tk.Label(card, bg=bg, image=Images.placeholder(62, 93))
-            img.pack(side="left", padx=10, pady=10)
+            img = tk.Label(card.body, bg=bg, image=Images.placeholder(62, 93))
+            img.pack(side="left")
             Images.load(m.image, 62, 93, lambda p, w=img: w.winfo_exists() and w.configure(image=p))
-            txt = tk.Frame(card, bg=bg)
-            txt.pack(side="left", fill="both", expand=True, pady=10, padx=(0, 10))
+            txt = tk.Frame(card.body, bg=bg)
+            txt.pack(side="left", fill="both", expand=True, padx=(10, 0))
             top = tk.Frame(txt, bg=bg)
             top.pack(fill="x")
             label(top, m.title, font=T.F_UI_B).pack(side="left")
@@ -466,7 +465,7 @@ class IdentifyStep(Step):
             if m.overview:
                 ov = m.overview[:220] + ("…" if len(m.overview) > 220 else "")
                 autowrap(label(txt, ov, fg=T.FAINT, font=T.F_SMALL)).pack(fill="x", pady=(4, 0))
-            for w in (card, img, txt, top, *txt.winfo_children(), *top.winfo_children()):
+            for w in (card, card.body, img, txt, top, *txt.winfo_children(), *top.winfo_children()):
                 w.bind("<Button-1>", lambda e, mm=m: self.select(mm))
 
     def select(self, m):
@@ -1599,11 +1598,22 @@ class PublishStep(Step):
     def _pending_blocker(self) -> str:
         """Upload déjà en attente de validation qui empêche d'en publier un autre (uploader non certifié)."""
         from .. import moderation as MOD
-        from ..config import read_history
+        from ..config import HISTORY_PATH, read_history
         s = self.s
         if getattr(s, "correction", None):
             return ""
-        return MOD.publish_blocker(read_history(), self.app.cfg.get("uploader_certified"), s.infohash or "")
+        try:
+            st = HISTORY_PATH.stat()
+            stamp = (st.st_mtime_ns, st.st_size)
+        except OSError:
+            stamp = None
+        key = (stamp, bool(self.app.cfg.get("uploader_certified")), s.infohash or "")
+        cached = getattr(self, "_blocker_cache", None)
+        if cached and cached[0] == key:         # l'historique n'a pas changé : pas de relecture à chaque appel
+            return cached[1]
+        res = MOD.publish_blocker(read_history(), key[1], key[2])
+        self._blocker_cache = (key, res)
+        return res
 
     def _shots_entry(self) -> dict:
         """Dossier des captures et NFO notés dans l'historique : supprimés quand C411 aura validé le torrent."""
@@ -1691,11 +1701,7 @@ class PublishStep(Step):
             UI.call(self._seed_status, st)
 
         def work():
-            try:
-                client.add(torrent, save, ih)
-            except CL.ClientError as e:
-                if "déjà présent" not in str(e):
-                    raise
+            CL.add_or_recheck(client, torrent, save, ih)
             return CL.wait_seeding(client, ih, on_status, cancel)
 
         def ok(st):
@@ -1815,6 +1821,13 @@ class PublishStep(Step):
         n = len(self.s.slot_justification.strip())
         self.just_count.configure(text=f"{n}/30" if n < 30 else f"{n} caractères",
                                   fg=T.WARNING if 0 < n < 30 else T.FAINT)
+        # Vérifications (accès disque et réseau compris) une fois la frappe arrêtée, pas à chaque touche
+        if getattr(self, "_checks_after", None):
+            self.after_cancel(self._checks_after)
+        self._checks_after = self.after(250, self._deferred_checks)
+
+    def _deferred_checks(self):
+        self._checks_after = None
         self.render_checks()
 
     def render_result(self, res=None, error: str = ""):
@@ -1823,7 +1836,7 @@ class PublishStep(Step):
         if not res and not error:
             return
         ok = res is not None and res.ok
-        card = Card(self.result_box, bg=T.SUCCESS_SOFT if ok else T.ERROR_SOFT)
+        card = Card(self.result_box, bg=T.SUCCESS_SOFT if ok else T.ERROR_SOFT, border=T.SUCCESS if ok else T.ERROR)
         card.pack(fill="x", pady=(0, 14))
         b = card.body
         msg = res.message if ok else (error or (res.message if res else ""))

@@ -9,7 +9,7 @@ from .. import __version__, updater
 from ..api import C411
 from ..config import KEY_LINKS, Config, read_history, remove_history
 from . import theme as T
-from .widgets import (UI, Btn, Field, ScrollFrame, TextArea, Tooltip, autowrap, help_icon, label, link, run_bg,
+from .widgets import (UI, Btn, Card, Field, ScrollFrame, TextArea, Tooltip, autowrap, help_icon, label, link, run_bg,
                       style_tree, wrap_check)
 
 
@@ -288,15 +288,17 @@ class SettingsDialog(Dialog):
 
     def _group(self, parent, title):
         label(parent, title.upper(), fg=T.FAINT, font=("Segoe UI Semibold", 8)).pack(fill="x", pady=(4, 4))
-        box = tk.Frame(parent, bg=T.SURFACE, highlightthickness=1, highlightbackground=T.BORDER)
-        box.pack(fill="x", pady=(0, 14))
+        card = Card(parent, padding=0)
+        card.pack(fill="x", pady=(0, 14))
+        box = card.body
         tk.Frame(box, bg=T.SURFACE, height=6).pack(fill="x")
         return box
 
     def _notice(self, parent, text, tone="accent"):
         bg, fg = (T.ACCENT_SOFT, T.TEXT) if tone == "accent" else (T.SURFACE2, T.MUTED)
-        box = tk.Frame(parent, bg=bg)
-        box.pack(fill="x", pady=(0, 14))
+        card = Card(parent, padding=0, bg=bg, border=None, radius=8)
+        card.pack(fill="x", pady=(0, 14))
+        box = card.body
         autowrap(label(box, text, fg=fg, bg=bg, font=T.F_SMALL)).pack(fill="x", padx=12, pady=8)
 
     def _row_frame(self, parent):
@@ -510,7 +512,7 @@ class SettingsDialog(Dialog):
             self.path_preview.configure(text=f"Pour le dossier de seed, le client recevra : {seen}", fg=T.MUTED)
 
     def _show_remote(self, on):
-        g = self.remote_group
+        g = self.remote_group.master                   # encadré arrondi du groupe (le contenu est .body)
         title = g.master.winfo_children()[g.master.winfo_children().index(g) - 1]
         if on and not g.winfo_ismapped():
             title.pack(fill="x", pady=(4, 4))
@@ -1010,8 +1012,8 @@ class UpdateDialog(Dialog):
     PHASES = ("Téléchargement", "Vérification par l'antivirus Windows", "Installation et redémarrage")
 
     def _build_progress(self):
-        self.prog = tk.Frame(self.body, bg=T.SURFACE, highlightthickness=1, highlightbackground=T.BORDER)
-        inner = tk.Frame(self.prog, bg=T.SURFACE)
+        self.prog = Card(self.body, padding=0)
+        inner = tk.Frame(self.prog.body, bg=T.SURFACE)
         inner.pack(fill="both", expand=True, padx=24, pady=20)
         label(inner, f"Installation de Forge411 {self.rel.version}", font=T.F_H2, bg=T.SURFACE).pack(fill="x")
         autowrap(label(inner, "Ne ferme pas Forge411 : il redémarre tout seul à la fin.", fg=T.MUTED,
@@ -1167,8 +1169,9 @@ class ShotLinksDialog(Dialog):
         label(body, f"La Team Pending exige au moins {minimum} captures, hors bannière, sur postimg.cc ou zupimages.net.",
               fg=T.MUTED, font=T.F_SMALL).pack(fill="x", pady=(2, 14))
 
-        steps = tk.Frame(body, bg=T.SURFACE, highlightthickness=1, highlightbackground=T.BORDER)
-        steps.pack(fill="x")
+        steps_card = Card(body, padding=0)
+        steps_card.pack(fill="x")
+        steps = steps_card.body
         self._step(steps, 1, "Ouvre le dossier des captures", f"{extracted} image(s) prête(s)",
                    "Ouvrir le dossier", lambda: SC.open_folder(folder))
         self._step(steps, 2, "Glisse-les sur postimages.org", "Ne pas redimensionner  ·  Pas d'expiration",

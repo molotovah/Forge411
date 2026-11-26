@@ -119,6 +119,17 @@ def changelog(rel: Release) -> list:
     return [(rel.version, "", rel.notes or "Pas de notes de version.")]
 
 
+def summary(notes: str, limit: int = 160) -> str:
+    """Première nouveauté des notes de version (Markdown), en texte simple, pour un bandeau ou une notification."""
+    for line in (notes or "").splitlines():
+        line = line.strip()
+        if not line.startswith(("- ", "* ")):
+            continue
+        text = re.sub(r"\*\*([^*]+)\*\*|`([^`]+)`", lambda m: m.group(1) or m.group(2), line[2:]).strip()
+        return text if len(text) <= limit else text[:limit - 1].rsplit(" ", 1)[0].rstrip(" ,;:") + "…"
+    return ""
+
+
 def check() -> Optional[Release]:
     """Release plus récente que la version en cours, sinon None."""
     rel = latest()

@@ -122,6 +122,28 @@ def px(widget, n: int) -> int:
         return n
 
 
+def flash_taskbar(root: tk.Misc):
+    """Fait clignoter le bouton de Forge411 dans la barre des tâches Windows jusqu'à ce que la fenêtre revienne
+    au premier plan. Rien si elle y est déjà."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class FLASHWINFO(ctypes.Structure):
+            _fields_ = [("cbSize", wintypes.UINT), ("hwnd", wintypes.HWND), ("dwFlags", wintypes.DWORD),
+                        ("uCount", wintypes.UINT), ("dwTimeout", wintypes.DWORD)]
+        user32 = ctypes.windll.user32
+        hwnd = user32.GetParent(root.winfo_id())
+        if user32.GetForegroundWindow() == hwnd:
+            return
+        info = FLASHWINFO(ctypes.sizeof(FLASHWINFO), hwnd, 0x2 | 0xC, 0, 0)   # FLASHW_TRAY | FLASHW_TIMERNOFG
+        user32.FlashWindowEx(ctypes.byref(info))
+    except Exception:
+        pass
+
+
 def dark_title_bar(root: tk.Tk):
     """Barre de titre Windows assortie au mode (sombre ou claire)."""
     if sys.platform != "win32":

@@ -72,60 +72,201 @@ def run_bg(fn: Callable, on_ok: Callable = None, on_err: Callable = None):
 # Boutons
 # ═══════════════════════════════════════════════════════════════════════════
 
-class Btn(tk.Label):
+# ── Formes arrondies (style C411) ─────────────────────────────────────────
+# Tk ne sait pas arrondir un cadre : les quatre coins sont des images anticrénelées (Pillow, sur-échantillonnage
+# x4, transparentes donc valables sur tout fond), mises en cache par rayon et couleurs ; les côtés sont des
+# rectangles et des traits du canevas. Sans Pillow : coins droits.
+
+_CORNERS: dict = {}
+_FONTS: dict = {}
+
+
+def _font(spec):
+    """Police Tk mise en cache (mesure du texte des boutons sans recréer d'objet à chaque bouton)."""
+    f = _FONTS.get(spec)
+    if f is None:
+        import tkinter.font as tkfont
+        f = _FONTS[spec] = tkfont.Font(font=spec)
+    return f
+
+
+def _corners(r: int, fill: str, outline: Optional[str]):
+    key = (r, fill, outline)
+    if key in _CORNERS:
+        return _CORNERS[key]
+    k = 4
+    big = Image.new("RGBA", (2 * r * k, 2 * r * k), (0, 0, 0, 0))
+    d = ImageDraw.Draw(big)
+    if outline:
+        d.ellipse([0, 0, 2 * r * k - 1, 2 * r * k - 1], fill=outline)
+        d.ellipse([k, k, 2 * r * k - 1 - k, 2 * r * k - 1 - k], fill=fill)
+    else:
+        d.ellipse([0, 0, 2 * r * k - 1, 2 * r * k - 1], fill=fill)
+    img = big.resize((2 * r, 2 * r), Image.LANCZOS)
+    parts = {"nw": (0, 0, r, r), "ne": (r, 0, 2 * r, r), "sw": (0, r, r, 2 * r), "se": (r, r, 2 * r, 2 * r)}
+    out = _CORNERS[key] = {a: ImageTk.PhotoImage(img.crop(box)) for a, box in parts.items()}
+    return out
+
+
+def round_rect(cv: tk.Canvas, w: int, h: int, r: int, fill: Optional[str], outline: Optional[str] = None,
+               tag: str = "shape"):
+    """Rectangle arrondi plein (et liseré d'un pixel) couvrant [0, w) x [0, h) du canevas, sous le reste."""
+    cv.delete(tag)
+    if not fill or w < 2 or h < 2:
+        return
+    r = max(0, min(r, w // 2, h // 2))
+    if r < 2 or not PIL_OK:
+        cv.create_rectangle(0, 0, w - 1, h - 1, fill=fill, outline=outline or fill, tags=tag)
+        cv.tag_lower(tag)
+        return
+    c = _corners(r, fill, outline)
+    cv.create_rectangle(r, 0, w - r, h, fill=fill, width=0, tags=tag)
+    cv.create_rectangle(0, r, w, h - r, fill=fill, width=0, tags=tag)
+    for anchor, x, y in (("nw", 0, 0), ("ne", w, 0), ("sw", 0, h), ("se", w, h)):
+        cv.create_image(x, y, image=c[anchor], anchor=anchor, tags=tag)
+    if outline:
+        for x0, y0, x1, y1 in ((r, 0, w - r, 0), (r, h - 1, w - r, h - 1), (0, r, 0, h - r),
+                               (w - 1, r, w - 1, h - r)):
+            cv.create_line(x0, y0, x1, y1, fill=outline, tags=tag)
+    cv.tag_lower(tag)
+
+
+def _parent_bg(parent) -> str:
+    try:
+        return parent.cget("bg")
+    except tk.TclError:
+        return T.BG
+
+
+class Btn(tk.Canvas):
+    """Bouton arrondi (rayon 6, comme sur C411). Même interface qu'avant : set_enabled, set_text, command."""
+
     STYLES = {
         "primary": (T.ACCENT, T.ON_ACCENT, T.ACCENT_HOVER),
         "secondary": (T.SURFACE2, T.TEXT, T.HOVER),
         "ghost": (None, T.MUTED, T.SURFACE2),
         "danger": (T.ERROR_SOFT, T.ERROR, T.ERROR_HOVER),
         "success": (T.SUCCESS, T.ON_ACCENT, T.SUCCESS_HOVER),
+        "soft": (T.ACCENT_SOFT, T.ACCENT, T.HOVER),
     }
 
     def __init__(self, parent, text: str, command: Callable = None, kind: str = "secondary",
                  small: bool = False, width: int = None, **kw):
+        super().__init__(parent, bg=_parent_bg(parent), highlightthickness=0, bd=0, cursor="hand2", **kw)
         self.kind = kind
-        bg, fg, hover = self.STYLES[kind]
-        self._parent_bg = parent.cget("bg") if "bg" in parent.keys() else T.BG
-        self._bg = bg or self._parent_bg
-        self._fg, self._hover = fg, hover
+        self._bg, self._fg, self._hover = self.STYLES[kind]
         self.command = command
         self.enabled = True
-        pad = (10, 4) if small else (16, 8)
-        super().__init__(parent, text=text, bg=self._bg, fg=fg, cursor="hand2",
-                         font=T.F_SMALL_B if small else T.F_UI_B,
-                         padx=pad[0], pady=pad[1], width=width or 0, **kw)
-        self.bind("<Enter>", lambda e: self.enabled and self.configure(bg=self._hover))
-        self.bind("<Leave>", lambda e: self.configure(bg=self._bg if self.enabled else T.SURFACE))
-        self.bind("<ButtonRelease-1>", self._click)
+        self._hovered = False
+        self._spec = T.F_SMALL_B if small else T.F_UI_B
+        self._padx, self._pady = T.px(self, 12 if small else 16), T.px(self, 5 if small else 8)
+        self._r = T.px(self, 6)
+        self._chars = width
+        self._text = self.create_text(0, 0, text=text, fill=self._fg, font=self._spec, anchor="center")
+        self._fit()
+        self.bind("<Configure>", lambda e: self._paint(), add="+")
+        self.bind("<Enter>", lambda e: self._set_hover(True), add="+")
+        self.bind("<Leave>", lambda e: self._set_hover(False), add="+")
+        self.bind("<ButtonRelease-1>", self._click, add="+")
+
+    def _fit(self):
+        f = _font(self._spec)
+        tw = f.measure(self.itemcget(self._text, "text"))
+        if self._chars:
+            tw = max(tw, f.measure("0") * self._chars)
+        self.configure(width=tw + 2 * self._padx, height=f.metrics("linespace") + 2 * self._pady)
+        self._paint()
+
+    def _paint(self):
+        w, h = self.winfo_width(), self.winfo_height()
+        if w <= 1:                                   # pas encore affiché : taille demandée
+            w, h = int(self.cget("width")), int(self.cget("height"))
+        if not self.enabled:
+            fill, fg = (T.SURFACE2 if self._bg else None), T.FAINT
+        else:
+            fill, fg = (self._hover if self._hovered else self._bg), self._fg
+        round_rect(self, w, h, self._r, fill)
+        self.coords(self._text, w / 2, h / 2)
+        self.itemconfigure(self._text, fill=fg)
+
+    def _set_hover(self, on: bool):
+        self._hovered = on and self.enabled
+        self._paint()
 
     def _click(self, e):
         if not self.enabled or not self.command:
             return
-        w = self.winfo_width()
-        h = self.winfo_height()
-        if 0 <= e.x <= w and 0 <= e.y <= h:
-            self.configure(bg=self._bg)       # sinon le survol reste affiché si une fenêtre s'ouvre par-dessus
+        if 0 <= e.x <= self.winfo_width() and 0 <= e.y <= self.winfo_height():
+            self._set_hover(False)        # sinon le survol reste affiché si une fenêtre s'ouvre par-dessus
             self.command()
 
     def set_enabled(self, on: bool):
+        if on == self.enabled:
+            return
         self.enabled = on
-        self.configure(bg=self._bg if on else T.SURFACE, fg=self._fg if on else T.FAINT,
-                       cursor="hand2" if on else "arrow")
+        self._hovered = False
+        self.configure(cursor="hand2" if on else "arrow")
+        self._paint()
 
     def set_text(self, text: str):
-        self.configure(text=text)
+        if text != self.itemcget(self._text, "text"):
+            self.itemconfigure(self._text, text=text)
+            self._fit()
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Conteneurs
 # ═══════════════════════════════════════════════════════════════════════════
 
-class Card(tk.Frame):
-    def __init__(self, parent, padding: int = 16, bg: str = T.SURFACE, **kw):
-        super().__init__(parent, bg=bg, highlightbackground=T.BORDER,
-                         highlightthickness=1, **kw)
+class Card(tk.Canvas):
+    """Encadré arrondi (rayon 10, liseré d'un pixel). Le contenu va dans .body, qui fixe la hauteur ; la
+    largeur suit celle donnée à l'encadré (pack fill="x", grid sticky…)."""
+
+    def __init__(self, parent, padding: int = 16, bg: str = T.SURFACE, border: Optional[str] = T.BORDER,
+                 radius: int = 10, **kw):
+        super().__init__(parent, bg=_parent_bg(parent), highlightthickness=0, bd=0, width=1, height=1, **kw)
+        self.fill, self.border = bg, border
+        self._r = T.px(self, radius)
+        # marge minimale : le contenu (rectangle) ne doit pas recouvrir l'arrondi ni le liseré
+        self._pad = max(T.px(self, padding), int(self._r * 0.3) + 1)
         self.body = tk.Frame(self, bg=bg)
-        self.body.pack(fill="both", expand=True, padx=padding, pady=padding)
+        self._win = self.create_window(self._pad, self._pad, window=self.body, anchor="nw")
+        self._size = (0, 0)
+        self.body.bind("<Configure>", lambda e: self._fit(), add="+")
+        self.bind("<Configure>", self._resized, add="+")
+        # Un canevas masque une fenêtre intégrée hors de sa zone visible : tant que l'encadré mesure 1 px, le
+        # contenu n'est jamais affiché, donc jamais mesuré. Premier ajustement une fois le contenu construit.
+        self.after_idle(self._fit)
+
+    def _fit(self):
+        """La hauteur suit le contenu. La largeur demandée ne fait que grandir : la laisser aussi rétrécir boucle
+        avec les textes repliés (largeur → repli → largeur demandée → largeur de la fenêtre → …)."""
+        if not self.winfo_exists():
+            return
+        h = self.body.winfo_reqheight() + 2 * self._pad
+        if int(self.cget("height")) != h:
+            self.configure(height=h)
+        w = self.body.winfo_reqwidth() + 2 * self._pad
+        if w > int(self.cget("width")):
+            self.configure(width=w)
+
+    def _resized(self, e):
+        if (e.width, e.height) == self._size:
+            return
+        if e.width != self._size[0]:
+            self.itemconfigure(self._win, width=max(e.width - 2 * self._pad, 1))
+        self._size = (e.width, e.height)
+        round_rect(self, e.width, e.height, self._r, self.fill, self.border)
+
+    def set_colors(self, fill: str = None, border: str = None):
+        """Change le fond et/ou le liseré (survol, sélection)."""
+        if fill:
+            self.fill = fill
+            self.body.configure(bg=fill)
+        if border:
+            self.border = border
+        if self._size != (0, 0):
+            round_rect(self, *self._size, self._r, self.fill, self.border)
 
 
 class ScrollFrame(tk.Frame):
@@ -142,7 +283,22 @@ class ScrollFrame(tk.Frame):
         self.inner.bind("<Configure>", lambda e: self.canvas.configure(
             scrollregion=self.canvas.bbox("all")))
         self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfigure(self._win, width=e.width))
-        self.bind_all("<MouseWheel>", self._wheel, add="+")
+        root = self.winfo_toplevel().nametowidget(".")
+        if not getattr(root, "_forge_wheel", False):      # un seul gestionnaire global, quel que soit le nombre
+            root._forge_wheel = True                      # de zones défilantes ouvertes depuis le lancement
+            self.bind_all("<MouseWheel>", ScrollFrame._dispatch, add="+")
+
+    @staticmethod
+    def _dispatch(e):
+        """Molette : fait défiler la zone défilante la plus proche du widget survolé qui peut défiler (une zone
+        imbriquée sans barre de défilement laisse la main à celle qui la contient)."""
+        w = e.widget
+        if not isinstance(w, tk.Misc) or isinstance(w, (tk.Text, tk.Listbox)):
+            return
+        while w is not None:
+            if isinstance(w, ScrollFrame) and w._wheel(e):
+                return
+            w = getattr(w, "master", None)
 
     def _on_scroll(self, lo, hi):
         if float(lo) <= 0 and float(hi) >= 1:
@@ -151,16 +307,14 @@ class ScrollFrame(tk.Frame):
             self.vsb.pack(side="right", fill="y")
         self.vsb.set(lo, hi)
 
-    def _wheel(self, e):
-        w = e.widget
-        if not isinstance(w, tk.Misc) or isinstance(w, (tk.Text, tk.Listbox)):
-            return
+    def _wheel(self, e) -> bool:
         try:
-            path = str(w)
-        except Exception:
-            return
-        if path.startswith(str(self.canvas)) and self.vsb.winfo_ismapped():
-            self.canvas.yview_scroll(int(-e.delta / 120) * 3, "units")
+            if self.vsb.winfo_ismapped():
+                self.canvas.yview_scroll(int(-e.delta / 120) * 3, "units")
+                return True
+        except tk.TclError:                 # zone détruite entre-temps
+            pass
+        return False
 
     def to_top(self):
         self.canvas.yview_moveto(0)
@@ -224,8 +378,7 @@ def wrap_check(parent, var, text: str, command=None, bg: str = None) -> tk.Frame
 def wrap_name(lbl: tk.Label, text: str) -> tk.Label:
     """Nom de release sans espaces (Film.2024.1080p…) replié sur la largeur disponible, coupé après les points,
     tirets ou crochets : un Label Tk ne replie qu'aux espaces."""
-    from tkinter import font as tkfont
-    f = tkfont.Font(font=lbl.cget("font"))
+    f = _font(lbl.cget("font"))
     parts = re.findall(r"[^.\-\]]+[.\-\]]?|[.\-\]]", text)
 
     def flow(e=None):
@@ -264,12 +417,36 @@ def autowrap(lbl: tk.Label) -> tk.Label:
     return lbl
 
 
-def badge(parent, text: str, tone: str = "accent") -> tk.Label:
-    colors = {"accent": (T.ACCENT_SOFT, T.ACCENT_HOVER), "success": (T.SUCCESS_SOFT, T.SUCCESS),
+class badge(tk.Canvas):
+    """Pastille arrondie (type, statut…). Interface d'un libellé : configure(text=…) reste possible."""
+
+    COLORS = {"accent": (T.ACCENT_SOFT, T.ACCENT_HOVER), "success": (T.SUCCESS_SOFT, T.SUCCESS),
               "warning": (T.WARNING_SOFT, T.WARNING), "error": (T.ERROR_SOFT, T.ERROR),
               "muted": (T.SURFACE2, T.MUTED)}
-    bg, fg = colors[tone]
-    return tk.Label(parent, text=text, bg=bg, fg=fg, font=T.F_SMALL_B, padx=8, pady=2)
+
+    def __init__(self, parent, text: str, tone: str = "accent"):
+        super().__init__(parent, bg=_parent_bg(parent), highlightthickness=0, bd=0)
+        self.fill, fg = self.COLORS[tone]
+        self._t = self.create_text(0, 0, text=text, fill=fg, font=T.F_SMALL_B, anchor="center")
+        self._fit()
+
+    def _fit(self):
+        f = _font(T.F_SMALL_B)
+        w = f.measure(self.itemcget(self._t, "text")) + 2 * T.px(self, 9)
+        h = f.metrics("linespace") + 2 * T.px(self, 2)
+        self.configure(width=w, height=h)
+        round_rect(self, w, h, h // 2, self.fill)
+        self.coords(self._t, w / 2, h / 2)
+
+    def configure(self, cnf=None, **kw):
+        text = kw.pop("text", None)
+        res = super().configure(cnf, **kw) if (cnf or kw) else None
+        if text is not None:
+            self.itemconfigure(self._t, text=text)
+            self._fit()
+        return res
+
+    config = configure
 
 
 class IssueList(tk.Frame):
@@ -282,6 +459,10 @@ class IssueList(tk.Frame):
         super().__init__(parent, bg=parent.cget("bg"), **kw)
 
     def show(self, items: list[tuple[str, str]], wrap: int = 760):
+        key = (tuple(items), wrap)
+        if key == getattr(self, "_shown", None):      # rien de changé : pas de reconstruction
+            return
+        self._shown = key
         for w in self.winfo_children():
             w.destroy()
         for tone, msg in items:
@@ -489,14 +670,14 @@ class StatsPanel(tk.Frame):
         super().__init__(parent, bg=parent.cget("bg"))
         self.values: dict[str, tk.Label] = {}
         for col, (key, caption) in enumerate(fields):
-            tile = tk.Frame(self, bg=T.SURFACE2)
-            tile.grid(row=0, column=col, sticky="nsew", padx=(0 if col == 0 else T.px(self, 8), 0))
+            card = Card(self, padding=10, bg=T.SURFACE2, border=None, radius=8)
+            card.grid(row=0, column=col, sticky="nsew", padx=(0 if col == 0 else T.px(self, 8), 0))
             self.columnconfigure(col, weight=1, uniform="tile")
-            pad = dict(padx=T.px(self, 12))
+            tile = card.body
             tk.Label(tile, text=caption.upper(), bg=T.SURFACE2, fg=T.FAINT, font=T.F_SMALL_B,
-                     anchor="w").pack(fill="x", pady=(T.px(self, 8), 0), **pad)
+                     anchor="w").pack(fill="x")
             v = tk.Label(tile, text="…", bg=T.SURFACE2, fg=T.TEXT, font=T.F_H2, anchor="w")
-            v.pack(fill="x", pady=(0, T.px(self, 8)), **pad)
+            v.pack(fill="x")
             self.values[key] = v
         self.note = tk.Label(self, text="", bg=self.cget("bg"), fg=T.MUTED, font=T.F_SMALL, anchor="w",
                              justify="left")
