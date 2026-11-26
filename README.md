@@ -25,7 +25,7 @@ Forge411 analyse ce que tu partages, retrouve la fiche, nomme la release selon l
 
 ## Ce que Forge411 fait pour toi
 
-| | |
+| Fonction | En détail |
 |---|---|
 | 🔎 **Reconnaît et lit** | Film, épisode, saison, album, livre, BD, jeu, application, ROM, carte GPS, modèle 3D, XXX : pistes audio et sous-titres, tags, métadonnées, type de release. |
 | 🗂️ **Retrouve la fiche** | TMDB, MusicBrainz, Open Library, RAWG, ThePornDB : titre français, résumé, affiche, genres. |
