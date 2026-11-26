@@ -10,7 +10,7 @@ Choisis un fichier ou un dossier. Forge411 reconnaît le type de contenu, propos
 
 <img src="https://raw.githubusercontent.com/molotovah/Forge411/main/docs/screenshots/03-source.png" width="820" alt="Étape Source">
 
-**Ouvrir l'emplacement** affiche la source dans l'explorateur. Si un dossier de seed est réglé et que la source n'y est pas, **Déplacer dans le dossier de seed** l'y déplace : vitesse, temps restant et courbe de vitesse s'affichent pendant la copie.
+**Ouvrir l'emplacement** affiche la source dans l'explorateur. Si un dossier de seed est réglé et que la source n'y est pas, **Déplacer dans le dossier de seed** l'y déplace. Pendant la copie s'affichent les fichiers copiés, la vitesse, le temps écoulé et restant, et la courbe de vitesse ; à la fin, un bilan reste affiché : vitesse moyenne et maximale, durée.
 
 ## 2. Identification
 
@@ -60,7 +60,7 @@ Quand des captures d'écran manquent, un encart orange au-dessus de la descripti
 
 ## 6. Publication
 
-Forge411 crée le torrent, affiche ce qu'il reste à vérifier, puis l'envoie. Pendant le hachage du torrent, des tuiles indiquent la vitesse, le temps écoulé, le temps restant et les pièces hachées, avec la courbe de vitesse ; à la fin, la durée totale et la vitesse moyenne. Le seed est ensuite vérifié dans ton client : voir [Client torrent et seed](Client-torrent-et-seed).
+Forge411 crée le torrent, affiche ce qu'il reste à vérifier, puis l'envoie. Pendant le hachage du torrent, des tuiles indiquent les pièces hachées, la vitesse, le temps écoulé et le temps restant, avec la courbe de vitesse ; à la fin, le bilan : vitesse moyenne et maximale, durée. Le seed est ensuite vérifié dans ton client : voir [Client torrent et seed](Client-torrent-et-seed).
 
 <img src="https://raw.githubusercontent.com/molotovah/Forge411/main/docs/screenshots/09-publication.png" width="820" alt="Publication">
 

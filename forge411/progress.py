@@ -19,6 +19,7 @@ class Reading:
     speed: float            # octets par seconde sur les dernières secondes, 0 tant qu'inconnu
     average: float          # octets par seconde depuis le début du suivi
     eta: Optional[float]    # secondes restantes, None tant qu'inconnu
+    peak: float = 0.0       # vitesse la plus haute relevée (fenêtre glissante)
 
     @property
     def fraction(self) -> float:
@@ -35,6 +36,7 @@ class RateMeter:
         self.start = time.monotonic() if start is None else start
         self.base = self._clamp(done)
         self.samples: deque = deque([(self.start, self.base)])
+        self.peak = 0.0
 
     def _clamp(self, done) -> int:
         return max(0, min(int(done), self.total))
@@ -44,7 +46,7 @@ class RateMeter:
         done = self._clamp(done)
         if done < self.samples[-1][1]:          # le client recommence (nouvelle vérification) : on repart de là
             self.samples.clear()
-            self.start, self.base = now, done
+            self.start, self.base, self.peak = now, done, 0.0
         self.samples.append((now, done))
         while len(self.samples) > 2 and now - self.samples[1][0] >= self.window:
             self.samples.popleft()
@@ -53,7 +55,8 @@ class RateMeter:
         elapsed = now - self.start
         average = (done - self.base) / elapsed if elapsed >= 0.5 else 0.0
         eta = 0.0 if done >= self.total else ((self.total - done) / speed if speed > 0 else None)
-        return Reading(done, self.total, elapsed, speed, average, eta)
+        self.peak = max(self.peak, speed)
+        return Reading(done, self.total, elapsed, speed, average, eta, self.peak)
 
 
 def fmt_rate(bps: float) -> str:

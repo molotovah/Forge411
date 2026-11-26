@@ -29,6 +29,19 @@ class Dialog(tk.Toplevel):
         self.geometry(f"{width}x{height}+{max(x, 0)}+{max(y, 0)}")
         self.bind("<Escape>", lambda e: self.destroy())
 
+    def fit_height(self, content: tk.Misc, chrome: int):
+        """Hauteur ajustée au contenu (sans défilement) dans la limite de l'écran, fenêtre gardée dans la zone
+        utilisable. content : cadre du contenu défilant ; chrome : hauteur fixe autour (marges, barre du bas)."""
+        self.update_idletasks()
+        ax, ay, aw, ah = T.work_area(self)
+        margin = T.px(self, 16)
+        need = content.winfo_reqheight() + chrome
+        h = max(T.px(self, 320), min(need, ah - 2 * margin - T.px(self, 32)))   # 32 : barre de titre
+        w = min(self.winfo_width(), aw - 2 * margin)
+        x = min(max(self.winfo_x(), ax + margin), ax + aw - w - margin)
+        y = min(max(self.winfo_y(), ay + margin), ay + ah - h - margin - T.px(self, 32))
+        self.geometry(f"{w}x{h}+{x}+{max(y, ay)}")
+
     def show(self):
         self.deiconify()
         T.dark_title_bar(self)
@@ -261,7 +274,7 @@ class SettingsDialog(Dialog):
         pg = self._page("general", "Général", "Apparence et mises à jour.")
         g = self._group(pg, "Apparence")
         cell = self._row(g, "Thème", "Sombre par défaut. Système suit le réglage clair / sombre de Windows. "
-                                     "Ton choix est conservé ; appliqué au redémarrage.")
+                                     "Ton choix est conservé et appliqué dès l'enregistrement.")
         ttk.Combobox(cell, textvariable=self.theme, values=list(T.MODES.values()), state="readonly",
                      width=16).pack(side="left")
         g = self._group(pg, "Mises à jour")

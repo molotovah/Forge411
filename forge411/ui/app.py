@@ -665,10 +665,39 @@ class App(tk.Tk):
             if self.cfg.get("c411_api_key") and self.profile_cache is None:
                 self.fetch_profile()
             if self.cfg.get("theme") != theme and T.resolve(self.cfg.get("theme")) != T.MODE:
-                lost = " L'upload en cours sera proposé à la reprise." if self.session.src and not self.session.result else ""
-                if messagebox.askyesno("Apparence", "Redémarrer Forge411 maintenant pour appliquer le nouveau mode ?"
-                                       + lost + "\n\nSinon, il s'appliquera au prochain lancement.", parent=self):
-                    self.restart_app()
+                if self._busy or self._seed_running():
+                    messagebox.showinfo("Apparence", "Une opération est en cours (analyse, création du torrent ou "
+                                                     "suivi du seed) : le nouveau thème s'appliquera au prochain "
+                                                     "lancement.", parent=self)
+                else:
+                    self.apply_theme(self.cfg.get("theme"))
+
+    def _seed_running(self) -> bool:
+        step = self.steps[-1] if hasattr(self, "steps") else None
+        return bool(step is not None and getattr(step, "_seed_cancel", None))
+
+    def apply_theme(self, mode: str):
+        """Change de thème sans redémarrer : nouvelle palette, interface reconstruite à l'identique (étape, upload
+        en cours, profil, mise à jour signalée). Les composants lisent la palette à leur création."""
+        Tooltip.hide_all()
+        T.set_mode(mode)
+        T.apply(self)
+        current, rel, prof = self.current, self.update_rel, self.profile_cache
+        notified, later = self._upd_notified, self._upd_later
+        for w in self.winfo_children():           # fenêtres secondaires comprises
+            w.destroy()
+        self._toast_box = None
+        self._build()
+        self.steps = [cls(self) for cls in STEPS]
+        self.current = 0
+        self._upd_notified, self._upd_later = notified, later
+        if prof:
+            self.set_profile(prof[0])
+            self.profile_cache = prof                 # heure de lecture d'origine (délai de 30 s de C411)
+        if rel is not None:
+            self.set_update(rel, notify=False)
+        self.show(current if current == 0 or self.reachable(current) else 0)
+        T.dark_title_bar(self)
 
     def restart_app(self):
         """Relance l'application (nouvelle apparence)."""

@@ -62,6 +62,16 @@ class RateMeterTests(unittest.TestCase):
         r = m.update(15 * M, now=8.0)
         self.assertAlmostEqual(r.speed, 5 * M)
 
+    def test_peak_kept_for_final_summary(self):
+        """Fin de copie : la vitesse maximale reste connue (bilan), même si la dernière mesure est plus basse."""
+        m = RateMeter(1000 * M, window=2.0, start=0.0)
+        done = 0
+        for t, step in enumerate([100, 100, 300, 300, 50, 50, 50, 50], 1):
+            done += step * M
+            r = m.update(done, now=float(t))
+        self.assertAlmostEqual(r.peak, 300 * M)
+        self.assertLess(r.speed, r.peak)
+
     def test_formats(self):
         self.assertEqual(fmt_rate(150 * M), "150.0 Mo/s")
         self.assertEqual(fmt_eta(3725), "1:02:05")

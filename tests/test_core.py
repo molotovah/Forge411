@@ -1351,6 +1351,26 @@ class ShotsMissingTests(unittest.TestCase):
         self.assertIsNone(shots_missing("", ShotRule()))
 
 
+class ChartAxisTests(unittest.TestCase):
+    """Courbe de vitesse : graduations rondes en Mo/s (pas « 7.157 Mo/s ») et lissage sans dépassement."""
+
+    def test_axis_round_ticks(self):
+        from forge411.ui.widgets import axis
+        self.assertEqual(axis(134.4 * 1024 ** 2), (1024 ** 2, "Mo", 50, 150))
+        self.assertEqual(axis(2.2 * 1024 ** 3)[1:], ("Go", 1.0, 3.0))
+        unit, name, step, top = axis(9.8 * 1024 ** 2)
+        self.assertTrue(3 <= top / step <= 5)
+
+    def test_smooth_curve_stays_in_range(self):
+        from forge411.ui.widgets import smooth_curve
+        pts = [(i * 10.0, y) for i, y in enumerate([50, 50, 5, 95, 50, 50])]
+        out = smooth_curve(pts)
+        self.assertGreater(len(out), len(pts))
+        self.assertTrue(all(5 <= y <= 95 for _, y in out))
+        self.assertEqual(out[0], pts[0])
+        self.assertEqual(out[-1], pts[-1])
+
+
 class SpeedChartDataTests(unittest.TestCase):
     """Courbe de vitesse : au plus 2 x points valeurs, quelle que soit la durée (coût d'affichage constant)."""
 

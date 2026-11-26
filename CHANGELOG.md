@@ -2,9 +2,19 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [SemVer](https://semver.org/lang/fr/).
 
-## [Non publié]
+## [2.5.0] - 2026-11-26
+
+### Ajouté
+- Changement de thème sans redémarrer : l'interface se reconstruit aussitôt, avec l'étape et l'upload en cours.
+- Courbe de vitesse refaite façon tableau de bord : courbe lissée et anticrénelée, dégradé dessous, graduations rondes en Mo/s, temps écoulé, vitesse moyenne en pointillé et point sur la dernière mesure.
+- Fin d'une copie ou d'un hachage : bilan dans les tuiles (vitesse moyenne, durée, vitesse maximale) au lieu de la dernière vitesse mesurée. Le bilan du déplacement vers le dossier de seed reste affiché.
+
+### Modifié
+- Mode clair refait : fonds gris-bleu très clairs et cartes blanches (inspiré de GitHub Primer), vert de C411 assombri ; tous les textes atteignent le contraste WCAG AA (4,5:1), vérifié par les tests pour les deux thèmes.
+- Tuiles de statistiques dans le même ordre partout (hachage, copie, vérification) : avancement, vitesse, temps écoulé, temps restant.
 
 ### Corrigé
+- Mon profil : la fenêtre s'ouvre à la taille de son contenu, sans défilement, dans la limite de l'écran (barre des tâches exclue).
 - Visite guidée : la bulle était placée d'après une taille provisoire et pouvait sortir de la fenêtre.
 - Pochettes d'album (MusicBrainz) affichées carrées au lieu d'être recadrées en affiche ; images de jeux (RAWG) en paysage dans la liste des résultats aussi.
 - Courbe de vitesse masquée quand le hachage ou la copie est trop rapide pour être mesuré (cadre vide).

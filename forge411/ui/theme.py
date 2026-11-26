@@ -1,7 +1,7 @@
 """Palette (couleurs de C411, mode sombre / clair / système), polices et styles ttk.
 
-Le mode est lu dans la configuration au chargement du module : changer de mode
-demande un redémarrage de l'application (les composants lisent la palette à leur création).
+Le mode est lu dans la configuration au chargement du module ; set_mode() le change en cours de route et
+l'application reconstruit alors son interface (les composants lisent la palette à leur création).
 """
 
 import subprocess
@@ -20,14 +20,16 @@ PALETTES = {
         WARNING="#ffb900", WARNING_SOFT="#332606",
         ERROR="#ff637e", ERROR_SOFT="#3a1520", ERROR_HOVER="#4d1b29",
         INFO="#51a2ff", SECONDARY="#a684ff", UPLOADED="#00d492", DOWNLOADED="#ee760b"),
+    # Clair : neutres froids et cartes blanches (inspiré de GitHub Primer), vert de C411 assombri pour un contraste
+    # d'au moins 4,5:1 sur blanc (texte et boutons). Contrastes vérifiés par tests/test_ui_rules.py.
     "light": dict(
-        BG="#dad6ca", SIDEBAR="#e7e3d8", SURFACE="#eeebe4", SURFACE2="#e2ded3", HOVER="#d8d3c6",
-        BORDER="#cfcabd", TEXT="#0f172b", HIGHLIGHT="#020618", MUTED="#45556c", FAINT="#6b7a8f",
-        ACCENT="#007a55", ACCENT_HOVER="#005f42", ACCENT_SOFT="#cfe3d6", ON_ACCENT="#ffffff",
-        SUCCESS="#007a55", SUCCESS_SOFT="#cfe3d6", SUCCESS_HOVER="#005f42",
-        WARNING="#973c00", WARNING_SOFT="#f1dfc8",
-        ERROR="#c70036", ERROR_SOFT="#f3d3d8", ERROR_HOVER="#ecc0c8",
-        INFO="#1447e6", SECONDARY="#7008e7", UPLOADED="#007a55", DOWNLOADED="#b45309"),
+        BG="#f6f8fa", SIDEBAR="#eef1f5", SURFACE="#ffffff", SURFACE2="#f3f5f8", HOVER="#e6ebf0",
+        BORDER="#d8dee4", TEXT="#1f2328", HIGHLIGHT="#0d1117", MUTED="#57606a", FAINT="#636c76",
+        ACCENT="#007a55", ACCENT_HOVER="#00664a", ACCENT_SOFT="#e3f4ec", ON_ACCENT="#ffffff",
+        SUCCESS="#1a7f37", SUCCESS_SOFT="#dafbe1", SUCCESS_HOVER="#116329",
+        WARNING="#9a6700", WARNING_SOFT="#fff8c5",
+        ERROR="#cf222e", ERROR_SOFT="#ffebe9", ERROR_HOVER="#ffcecb",
+        INFO="#0969da", SECONDARY="#8250df", UPLOADED="#1a7f37", DOWNLOADED="#bc4c00"),
 }
 MODES = {"dark": "Sombre", "light": "Clair", "system": "Système"}
 
@@ -63,35 +65,21 @@ def _configured_mode() -> str:
         return "dark"
 
 
-MODE = resolve(_configured_mode())
-IS_DARK = MODE == "dark"
-_P = PALETTES[MODE]
-BG = _P["BG"]
-SIDEBAR = _P["SIDEBAR"]
-SURFACE = _P["SURFACE"]
-SURFACE2 = _P["SURFACE2"]
-HOVER = _P["HOVER"]
-BORDER = _P["BORDER"]
-TEXT = _P["TEXT"]
-HIGHLIGHT = _P["HIGHLIGHT"]
-MUTED = _P["MUTED"]
-FAINT = _P["FAINT"]
-ACCENT = _P["ACCENT"]
-ACCENT_HOVER = _P["ACCENT_HOVER"]
-ACCENT_SOFT = _P["ACCENT_SOFT"]
-ON_ACCENT = _P["ON_ACCENT"]
-SUCCESS = _P["SUCCESS"]
-SUCCESS_SOFT = _P["SUCCESS_SOFT"]
-SUCCESS_HOVER = _P["SUCCESS_HOVER"]
-WARNING = _P["WARNING"]
-WARNING_SOFT = _P["WARNING_SOFT"]
-ERROR = _P["ERROR"]
-ERROR_SOFT = _P["ERROR_SOFT"]
-ERROR_HOVER = _P["ERROR_HOVER"]
-INFO = _P["INFO"]
-SECONDARY = _P["SECONDARY"]
-UPLOADED = _P["UPLOADED"]
-DOWNLOADED = _P["DOWNLOADED"]
+def set_mode(mode: str) -> str:
+    """Charge la palette du mode (« dark », « light » ou « system ») dans les constantes du module. Les composants
+    lisent ces constantes à leur création : l'application reconstruit ensuite son interface (App.apply_theme)."""
+    global MODE, IS_DARK
+    MODE = resolve(mode)
+    IS_DARK = MODE == "dark"
+    globals().update(PALETTES[MODE])
+    return MODE
+
+
+BG = SIDEBAR = SURFACE = SURFACE2 = HOVER = BORDER = TEXT = HIGHLIGHT = MUTED = FAINT = ""
+ACCENT = ACCENT_HOVER = ACCENT_SOFT = ON_ACCENT = SUCCESS = SUCCESS_SOFT = SUCCESS_HOVER = ""
+WARNING = WARNING_SOFT = ERROR = ERROR_SOFT = ERROR_HOVER = INFO = SECONDARY = UPLOADED = DOWNLOADED = ""
+MODE, IS_DARK = "dark", True
+set_mode(_configured_mode())
 
 F_UI = ("Segoe UI", 10)
 F_UI_B = ("Segoe UI Semibold", 10)
@@ -120,6 +108,20 @@ def px(widget, n: int) -> int:
         return round(n * widget.winfo_fpixels("1i") / 96)
     except tk.TclError:
         return n
+
+
+def work_area(widget: tk.Misc) -> tuple:
+    """Zone utilisable de l'écran principal (x, y, largeur, hauteur), barre des tâches Windows exclue."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            from ctypes import wintypes
+            r = wintypes.RECT()
+            if ctypes.windll.user32.SystemParametersInfoW(0x30, 0, ctypes.byref(r), 0):   # SPI_GETWORKAREA
+                return r.left, r.top, r.right - r.left, r.bottom - r.top
+        except Exception:
+            pass
+    return 0, 0, widget.winfo_screenwidth(), widget.winfo_screenheight() - 40
 
 
 def flash_taskbar(root: tk.Misc):

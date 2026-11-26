@@ -117,6 +117,12 @@ class ProfileDialog(Dialog):
         self._status(p)
         if p.class_name:
             self._class(p)
+        self.after(150, self._fit)            # encadrés arrondis ajustés : toute la page visible sans défiler
+
+    def _fit(self):
+        if self.winfo_exists():
+            bar = self.refresh_btn.master
+            self.fit_height(self.sf.inner, T.px(self, 20) + bar.winfo_reqheight() + T.px(self, 28) + T.px(self, 4))
 
     def _header(self, p):
         body = self._card()

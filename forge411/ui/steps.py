@@ -137,8 +137,8 @@ class SourceStep(Step):
         self.loading_bar = ttk.Progressbar(self.loading, mode="indeterminate")
         self.loading_bar.pack(fill="x", pady=(6, 0))
         # Déplacement vers le dossier de seed : mêmes tuiles que le hachage du torrent
-        self.move_stats = StatsPanel(self.loading, [("speed", "Vitesse"), ("elapsed", "Écoulé"), ("eta", "Restant"),
-                                                    ("files", "Fichiers")], chart=True)
+        self.move_stats = StatsPanel(self.loading, [("files", "Fichiers"), ("speed", "Vitesse"), ("elapsed", "Écoulé"),
+                                                    ("eta", "Restant")], chart=True)
         self.result = tk.Frame(self.root, bg=T.BG)
         self.result.pack(fill="both", expand=True)
 
@@ -179,6 +179,8 @@ class SourceStep(Step):
 
     def _start_loading(self, text):
         self.clear(self.result)
+        self.move_stats.pack_forget()             # bilan d'un déplacement précédent
+        self._move_summary_for = None
         self.loading.pack(fill="x", pady=(0, 14), before=self.result)
         self.loading_lbl.configure(text=text, fg=T.MUTED)
         self.loading_bar.configure(mode="indeterminate")
@@ -238,6 +240,9 @@ class SourceStep(Step):
     def render(self):
         self.clear(self.result)
         s = self.s
+        if not self.app._busy and getattr(self, "_move_summary_for", None) != (s.src.path if s.src else None):
+            self.move_stats.pack_forget()         # bilan de déplacement d'une autre source : masqué
+            self.loading.pack_forget()
         if not s.src:
             return
         src, prof = s.src, s.profile
@@ -310,18 +315,28 @@ class SourceStep(Step):
         self.move_stats.note.configure(text="Même disque : déplacement immédiat. Sinon copie, puis suppression de "
                                             "l'original une fois tout copié.", fg=T.MUTED)
         self.move_stats.pack(fill="x", pady=(10, 0))
-        meter, last = [None], [None]            # mesure du débit, dernier relevé (résumé final)
+        meter, last, files = [None], [None], [(0, 0)]   # mesure du débit, dernier relevé, fichiers (bilan final)
 
         def ok(_):
             r = last[0]
-            self.move_stats.finish()
-            self._stop_loading()
             fs.remap_paths(self.s.analysis, old_path, src.path)   # captures, NFO… lisent la vidéo au nouvel endroit
             self.app.invalidate_torrent()
+            if r is None:                       # même disque : déplacement immédiat, rien à mesurer
+                self._stop_loading()
+                self.render()
+                self.app.status.configure(text=f"Déplacé dans le dossier de seed : {dest}")
+                return
+            # Copie : le bilan reste affiché (vitesse moyenne et maximale, durée) jusqu'à la prochaine source
+            self.loading_bar.stop()
+            self.loading_bar.configure(value=100)
+            self.app.busy(False)
+            self.loading_lbl.configure(text=f"✓  Déplacé dans {dest} : {fmt_size(r.total)} copiés en "
+                                            f"{fmt_eta(r.elapsed)}", fg=T.SUCCESS)
+            n = files[0][1]
+            self.move_stats.finish(r, f"{n} / {n}")
+            self.move_stats.note.configure(text="Copie vérifiée, original supprimé.", fg=T.MUTED)
+            self._move_summary_for = src.path
             self.render()
-            if r is not None:
-                self.app.status.configure(text=f"Déplacé dans le dossier de seed : {fmt_size(r.total)} en "
-                                               f"{fmt_eta(r.elapsed)} ({fmt_rate(r.average) if r.average else '—'})")
 
         def show(done, total, i, n):                # thread Tk
             if not self.winfo_exists():
@@ -336,8 +351,9 @@ class SourceStep(Step):
             self.move_stats.set("elapsed", fmt_eta(r.elapsed))
             self.move_stats.set("eta", fmt_eta(r.eta))
             self.move_stats.set("files", f"{i} / {n}", T.SUCCESS if done >= total else T.TEXT)
+            files[0] = (i, n)
             if r.speed:
-                self.move_stats.plot(r.speed, r.average)
+                self.move_stats.plot(r.speed, r.average, r.elapsed)
 
         run_bg(lambda: fs.move(src, dest, lambda *a: UI.call(show, *a)),
                ok, lambda e: (self._stop_loading(), messagebox.showerror("Déplacement impossible", str(e), parent=self)))
@@ -1320,8 +1336,8 @@ class PublishStep(Step):
         self.tor_lbl.pack(fill="x")
         self.tor_bar = ttk.Progressbar(tor, mode="determinate", maximum=100)
         self.tor_bar.pack(fill="x", pady=(8, 0))
-        self.tor_stats = StatsPanel(tor, [("speed", "Vitesse"), ("elapsed", "Écoulé"), ("eta", "Restant"),
-                                          ("pieces", "Pièces")], chart=True)
+        self.tor_stats = StatsPanel(tor, [("pieces", "Pièces"), ("speed", "Vitesse"), ("elapsed", "Écoulé"),
+                                          ("eta", "Restant")], chart=True)
         self._tor_meter = self._tor_stats_for = None
         row = tk.Frame(tor, bg=T.SURFACE)
         row.pack(fill="x", pady=(10, 0))
@@ -1611,7 +1627,7 @@ class PublishStep(Step):
         self.tor_lbl.configure(text=f"Hachage… {f * 100:.0f} %  ({fmt_size(int(total * f))} / {fmt_size(total)})")
         r = self._tor_meter.update(total * f)
         if r.speed:
-            self.tor_stats.plot(r.speed, r.average)
+            self.tor_stats.plot(r.speed, r.average, r.elapsed)
         self.tor_stats.set("speed", fmt_rate(r.speed), T.ACCENT)
         self.tor_stats.set("elapsed", fmt_eta(r.elapsed))
         self.tor_stats.set("eta", fmt_eta(r.eta))
@@ -1630,13 +1646,9 @@ class PublishStep(Step):
     def _tor_finished(self):
         r = self._tor_meter.update(self.s.src.total_size)
         count = -(-r.total // piece_length_for(r.total))
-        self.tor_stats.set("speed", fmt_rate(r.average) if r.average else "—", T.ACCENT)
-        self.tor_stats.set("elapsed", fmt_eta(r.elapsed))
-        self.tor_stats.set("eta", "Terminé", T.SUCCESS)
-        self.tor_stats.set("pieces", f"{count} / {count}", T.SUCCESS)
-        self.tor_stats.note.configure(text=f"Hachage terminé en {fmt_eta(r.elapsed)}, vitesse moyenne "
-                                           f"{fmt_rate(r.average) if r.average else '—'}.", fg=T.MUTED)
-        self.tor_stats.finish()
+        self.tor_stats.finish(r, f"{count} / {count}")
+        self.tor_stats.note.configure(text=f"Hachage terminé : {fmt_size(r.total)} en {fmt_eta(r.elapsed)}, "
+                                           f"{count} pièce{'s' if count > 1 else ''} de {fmt_size(piece_length_for(r.total))}.", fg=T.MUTED)
         self._tor_meter = None
 
     def _done_torrent(self):
@@ -1850,9 +1862,11 @@ class PublishStep(Step):
         total = self.s.src.total_size
         r = self._seed_meter.update(total) if self._seed_meter else None
         self.seed_stats.set("checked", "100 %", T.SUCCESS)
-        self.seed_stats.set("speed", fmt_rate(r.average) if r and r.average else "—", T.ACCENT)
-        self.seed_stats.set("elapsed", fmt_eta(r.elapsed) if r else "—")
-        self.seed_stats.set("eta", "Terminé", T.SUCCESS)
+        if r is not None:
+            self.seed_stats.finish(r, "100 %")
+        else:
+            for k in ("speed", "elapsed", "eta"):
+                self.seed_stats.set(k, "—")
         self.seed_stats.note.configure(text=f"Données vérifiées à 100 % ({fmt_size(total)}) : le client seed.",
                                        fg=T.MUTED)
         self._seed_meter = None

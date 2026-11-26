@@ -2,6 +2,7 @@
 
 import io
 import logging
+import math
 import queue
 import re
 import threading
@@ -14,7 +15,7 @@ from ..model import fmt_size
 from . import theme as T
 
 try:
-    from PIL import Image, ImageDraw, ImageTk
+    from PIL import Image, ImageChops, ImageDraw, ImageTk
     PIL_OK = True
 except ImportError:
     PIL_OK = False
@@ -142,20 +143,23 @@ def _parent_bg(parent) -> str:
 class Btn(tk.Canvas):
     """Bouton arrondi (rayon 6, comme sur C411). Même interface qu'avant : set_enabled, set_text, command."""
 
-    STYLES = {
-        "primary": (T.ACCENT, T.ON_ACCENT, T.ACCENT_HOVER),
-        "secondary": (T.SURFACE2, T.TEXT, T.HOVER),
-        "ghost": (None, T.MUTED, T.SURFACE2),
-        "danger": (T.ERROR_SOFT, T.ERROR, T.ERROR_HOVER),
-        "success": (T.SUCCESS, T.ON_ACCENT, T.SUCCESS_HOVER),
-        "soft": (T.ACCENT_SOFT, T.ACCENT, T.HOVER),
-    }
+    @staticmethod
+    def styles() -> dict:
+        """Couleurs (fond, texte, survol) par type, lues dans la palette courante (thème changé à chaud)."""
+        return {
+            "primary": (T.ACCENT, T.ON_ACCENT, T.ACCENT_HOVER),
+            "secondary": (T.SURFACE2, T.TEXT, T.HOVER),
+            "ghost": (None, T.MUTED, T.SURFACE2),
+            "danger": (T.ERROR_SOFT, T.ERROR, T.ERROR_HOVER),
+            "success": (T.SUCCESS, T.ON_ACCENT, T.SUCCESS_HOVER),
+            "soft": (T.ACCENT_SOFT, T.ACCENT, T.HOVER),
+        }
 
     def __init__(self, parent, text: str, command: Callable = None, kind: str = "secondary",
                  small: bool = False, width: int = None, **kw):
         super().__init__(parent, bg=_parent_bg(parent), highlightthickness=0, bd=0, cursor="hand2", **kw)
         self.kind = kind
-        self._bg, self._fg, self._hover = self.STYLES[kind]
+        self._bg, self._fg, self._hover = self.styles()[kind]
         self.command = command
         self.enabled = True
         self._hovered = False
@@ -223,9 +227,11 @@ class Card(tk.Canvas):
     """Encadré arrondi (rayon 10, liseré d'un pixel). Le contenu va dans .body, qui fixe la hauteur ; la
     largeur suit celle donnée à l'encadré (pack fill="x", grid sticky…)."""
 
-    def __init__(self, parent, padding: int = 16, bg: str = T.SURFACE, border: Optional[str] = T.BORDER,
+    def __init__(self, parent, padding: int = 16, bg: str = None, border: Optional[str] = "default",
                  radius: int = 10, **kw):
         super().__init__(parent, bg=_parent_bg(parent), highlightthickness=0, bd=0, width=1, height=1, **kw)
+        bg = bg or T.SURFACE                       # palette lue à la création (thème changé à chaud)
+        border = T.BORDER if border == "default" else border
         self.fill, self.border = bg, border
         self._r = T.px(self, radius)
         # marge minimale : le contenu (rectangle) ne doit pas recouvrir l'arrondi ni le liseré
@@ -280,7 +286,8 @@ class Card(tk.Canvas):
 class ScrollFrame(tk.Frame):
     """Cadre défilant verticalement ; la molette agit seulement au survol."""
 
-    def __init__(self, parent, bg: str = T.BG, **kw):
+    def __init__(self, parent, bg: str = None, **kw):
+        bg = bg or T.BG
         super().__init__(parent, bg=bg, **kw)
         self.canvas = tk.Canvas(self, bg=bg, highlightthickness=0, bd=0)
         self.vsb = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
@@ -364,8 +371,8 @@ class TextArea(tk.Frame):
 # Petits éléments
 # ═══════════════════════════════════════════════════════════════════════════
 
-def label(parent, text="", fg=T.TEXT, font=T.F_UI, bg=None, **kw) -> tk.Label:
-    return tk.Label(parent, text=text, fg=fg, font=font,
+def label(parent, text="", fg=None, font=None, bg=None, **kw) -> tk.Label:
+    return tk.Label(parent, text=text, fg=fg or T.TEXT, font=font or T.F_UI,
                     bg=bg or parent.cget("bg"), anchor="w", justify="left", **kw)
 
 
@@ -432,13 +439,15 @@ def autowrap(lbl: tk.Label) -> tk.Label:
 class badge(tk.Canvas):
     """Pastille arrondie (type, statut…). Interface d'un libellé : configure(text=…) reste possible."""
 
-    COLORS = {"accent": (T.ACCENT_SOFT, T.ACCENT_HOVER), "success": (T.SUCCESS_SOFT, T.SUCCESS),
-              "warning": (T.WARNING_SOFT, T.WARNING), "error": (T.ERROR_SOFT, T.ERROR),
-              "muted": (T.SURFACE2, T.MUTED)}
+    @staticmethod
+    def colors() -> dict:
+        return {"accent": (T.ACCENT_SOFT, T.ACCENT_HOVER), "success": (T.SUCCESS_SOFT, T.SUCCESS),
+                "warning": (T.WARNING_SOFT, T.WARNING), "error": (T.ERROR_SOFT, T.ERROR),
+                "muted": (T.SURFACE2, T.MUTED)}
 
     def __init__(self, parent, text: str, tone: str = "accent"):
         super().__init__(parent, bg=_parent_bg(parent), highlightthickness=0, bd=0)
-        self.fill, fg = self.COLORS[tone]
+        self.fill, fg = self.colors()[tone]
         self._t = self.create_text(0, 0, text=text, fill=fg, font=T.F_SMALL_B, anchor="center")
         self._fit()
 
@@ -464,8 +473,9 @@ class badge(tk.Canvas):
 class IssueList(tk.Frame):
     """Liste d'erreurs / avertissements / validations avec pictogrammes."""
 
-    ICONS = {"error": ("✕", T.ERROR), "warning": ("!", T.WARNING), "ok": ("✓", T.SUCCESS),
-             "info": ("i", T.ACCENT)}
+    @staticmethod
+    def icons() -> dict:
+        return {"error": ("✕", T.ERROR), "warning": ("!", T.WARNING), "ok": ("✓", T.SUCCESS), "info": ("i", T.ACCENT)}
 
     def __init__(self, parent, **kw):
         super().__init__(parent, bg=parent.cget("bg"), **kw)
@@ -478,7 +488,7 @@ class IssueList(tk.Frame):
         for w in self.winfo_children():
             w.destroy()
         for tone, msg in items:
-            icon, color = self.ICONS[tone]
+            icon, color = self.icons()[tone]
             row = tk.Frame(self, bg=self.cget("bg"))
             row.pack(fill="x", pady=2)
             tk.Label(row, text=icon, fg=color, bg=self.cget("bg"), font=T.F_UI_B,
@@ -609,7 +619,7 @@ class Images:
 
     @classmethod
     def placeholder(cls, w: int, h: int):
-        key = ("ph", w, h)
+        key = ("ph", w, h, T.SURFACE2, T.BORDER)
         if key not in cls._tk and PIL_OK:
             img = Image.new("RGB", (w, h), T.SURFACE2)
             d = ImageDraw.Draw(img)
@@ -675,31 +685,80 @@ class Meter(tk.Canvas):
             self._bar(0, max(self.h, w * v), self.color)
 
 
-class SpeedChart(tk.Canvas):
-    """Courbe de vitesse (aire + trait) et vitesse moyenne en pointillé. Au plus `points` points : au-delà,
-    les mesures voisines sont fusionnées deux à deux (coût constant, quelle que soit la durée). Une ligne et
-    une aire réutilisées (coords) : moins d'une milliseconde par mise à jour."""
+def _hex(color: str, alpha: int = 255) -> tuple:
+    color = color.lstrip("#")
+    return tuple(int(color[i:i + 2], 16) for i in (0, 2, 4)) + (alpha,)
 
-    def __init__(self, parent, height: int = 64, points: int = 150):
+
+def nice_step(v: float) -> float:
+    """Pas de graduation « rond » (1, 2, 2,5, 5 x 10^n) au moins égal à v."""
+    if v <= 0:
+        return 1.0
+    exp = 10 ** math.floor(math.log10(v))
+    for m in (1, 2, 2.5, 5, 10):
+        if v <= m * exp + 1e-9:
+            return m * exp
+    return 10 * exp
+
+
+def axis(peak_bps: float) -> tuple:
+    """Graduations d'un axe de vitesse : (unité en octets, nom, pas, maximum) avec 3 à 5 valeurs rondes,
+    ex. 0, 50, 100, 150 Mo/s."""
+    unit, name = (1024 ** 3, "Go") if peak_bps >= 1024 ** 3 else \
+        ((1024 ** 2, "Mo") if peak_bps >= 1024 ** 2 else (1024, "Ko"))
+    top = max(peak_bps * 1.05 / unit, 1e-6)
+    step = nice_step(top / 3)
+    return unit, name, step, step * math.ceil(top / step)
+
+
+def smooth_curve(points: list, steps: int = 4) -> list:
+    """Courbe lissée passant par les points (Catmull-Rom), sans dépassement sous zéro ni au-dessus du maximum."""
+    if len(points) < 3:
+        return points
+    lo = max(y for _, y in points)               # y croît vers le bas : bornes de la zone tracée
+    hi = min(y for _, y in points)
+    out = []
+    p = [points[0]] + points + [points[-1]]
+    for i in range(1, len(p) - 2):
+        (x0, y0), (x1, y1), (x2, y2), (x3, y3) = p[i - 1], p[i], p[i + 1], p[i + 2]
+        for k in range(steps):
+            t = k / steps
+            t2, t3 = t * t, t * t * t
+            x = 0.5 * (2 * x1 + (-x0 + x2) * t + (2 * x0 - 5 * x1 + 4 * x2 - x3) * t2 + (-x0 + 3 * x1 - 3 * x2 + x3) * t3)
+            y = 0.5 * (2 * y1 + (-y0 + y2) * t + (2 * y0 - 5 * y1 + 4 * y2 - y3) * t2 + (-y0 + 3 * y1 - 3 * y2 + y3) * t3)
+            out.append((x, min(max(y, hi), lo)))
+    out.append(points[-1])
+    return out
+
+
+class SpeedChart(tk.Canvas):
+    """Courbe de vitesse façon tableau de bord : courbe lissée, dégradé dessous, graduations rondes, moyenne en
+    pointillé, point sur la dernière mesure. Rendu anticrénelé par Pillow (sur-échantillonnage x2) limité à
+    3 images par seconde (environ 7 ms chacune) ; libellés en texte Tk, nets et dans la police de l'application.
+    Au plus 2 x `points` valeurs : au-delà, les mesures voisines sont fusionnées (coût constant)."""
+
+    LEFT, BOTTOM, TOP = 64, 18, 8                 # marges (px à 100 %) : graduations à gauche, temps en bas
+
+    def __init__(self, parent, height: int = 132, points: int = 150):
         bg = _parent_bg(parent)
         super().__init__(parent, height=T.px(parent, height), bg=bg, highlightthickness=0, bd=0)
-        self.points = points
-        self._area = self.create_polygon(0, 0, 0, 0, 0, 0, fill=T.ACCENT_SOFT, outline="")
-        self._avg = self.create_line(0, 0, 0, 0, fill=T.MUTED, dash=(3, 3))
-        self._line = self.create_line(0, 0, 0, 0, fill=T.ACCENT, width=2)
-        self._max = self.create_text(0, 0, text="", fill=T.FAINT, font=T.F_SMALL, anchor="ne")
+        self.points, self.bg = points, bg
+        self._img = self.create_image(0, 0, anchor="nw")
+        self._photo = None
+        self._grad = {}
+        self._last_draw = 0.0
         self.reset()
-        self.bind("<Configure>", lambda e: self._draw())
+        self.bind("<Configure>", lambda e: self._draw(force=True))
 
     def reset(self):
-        self.vals: list = []          # vitesse par point (moyenne des mesures fusionnées)
-        self._weight: list = []
-        self._step = 1                # mesures par point
+        self.vals: list = []
+        self._step = 1
         self._pending = (0.0, 0)
         self.average = 0.0
-        self._draw()
+        self.elapsed = 0.0
+        self._draw(force=True)
 
-    def add(self, speed: float, average: float = 0.0):
+    def add(self, speed: float, average: float = 0.0, elapsed: float = 0.0):
         tot, n = self._pending
         tot, n = tot + speed, n + 1
         if n < self._step:
@@ -710,30 +769,80 @@ class SpeedChart(tk.Canvas):
             if len(self.vals) >= 2 * self.points:          # deux fois trop de points : fusion deux à deux
                 self.vals = [(a + b) / 2 for a, b in zip(self.vals[::2], self.vals[1::2])]
                 self._step *= 2
-        self.average = average
+        self.average, self.elapsed = average, elapsed
         self._draw()
 
-    def _draw(self):
-        w, h = self.winfo_width(), self.winfo_height()
-        if w < 10 or len(self.vals) < 2:
-            for item in (self._area, self._line, self._avg):
-                self.coords(item, 0, 0, 0, 0)
-            self.itemconfigure(self._max, text="")
+    def _draw(self, force: bool = False):
+        import time
+        now = time.monotonic()
+        if not force and now - self._last_draw < 0.33:
             return
-        top = max(max(self.vals), self.average) or 1
-        head, pad = T.px(self, 16), 2                # bande du haut réservée à « max … »
-        span = h - head - pad
-        dx = (w - 1) / (len(self.vals) - 1)
-        xy = []
-        for i, v in enumerate(self.vals):
-            xy += (i * dx, h - pad - v / top * span)
-        self.coords(self._line, *xy)
-        self.coords(self._area, 0, h, *xy, w - 1, h)
+        self._last_draw = now
+        self.delete("label")
+        w, h = self.winfo_width(), self.winfo_height()
+        if w < 60 or len(self.vals) < 2:
+            self.itemconfigure(self._img, image="")
+            return
+        s = 2 if PIL_OK else 1
+        L, B, top_m = T.px(self, self.LEFT), T.px(self, self.BOTTOM), T.px(self, self.TOP)
+        pw, ph = w - L - T.px(self, 6), h - B - top_m           # zone tracée
+        vals = self.vals
+        if len(vals) >= 5:                                      # moyenne glissante légère : courbe calme
+            vals = [sum(vals[max(0, i - 2):i + 3]) / len(vals[max(0, i - 2):i + 3]) for i in range(len(vals))]
+        unit, uname, step, top = axis(max(max(vals), self.average))
+        ymax = top * unit
+        ticks = [k * step for k in range(int(round(top / step)) + 1)]
+        to_y = lambda v: top_m + ph - v / ymax * ph
+        pts = [(L + i / (len(vals) - 1) * pw, to_y(v)) for i, v in enumerate(vals)]
+        curve = smooth_curve(pts)
+        if PIL_OK:
+            img = Image.new("RGBA", (w * s, h * s), _hex(self.bg))
+            d = ImageDraw.Draw(img)
+            grid = _hex(T.BORDER, 170)
+            for t in ticks:                                     # graduations rondes
+                y = to_y(t * unit) * s
+                d.line([(L * s, y), ((L + pw) * s, y)], fill=grid, width=s)
+            key = (w, h, T.ACCENT)
+            if key not in self._grad:                           # dégradé vertical : opaque en haut, transparent en bas
+                g = Image.linear_gradient("L").resize((w * s, h * s))
+                self._grad = {key: g.point(lambda v: int((255 - v) * 0.42))}
+            mask = Image.new("L", img.size, 0)
+            sc = [(x * s, y * s) for x, y in curve]
+            ImageDraw.Draw(mask).polygon([(L * s, (top_m + ph) * s)] + sc + [((L + pw) * s, (top_m + ph) * s)],
+                                         fill=255)
+            fill = Image.new("RGBA", img.size, _hex(T.ACCENT, 0))
+            fill.putalpha(ImageChops.multiply(self._grad[key], mask))
+            img.alpha_composite(fill)
+            if self.average:                                    # moyenne : pointillé
+                y = to_y(self.average) * s
+                x = L * s
+                while x < (L + pw) * s:
+                    d.line([(x, y), (min(x + 6 * s, (L + pw) * s), y)], fill=_hex(T.MUTED, 200), width=s)
+                    x += 11 * s
+            d.line(sc, fill=_hex(T.ACCENT), width=2 * s, joint="curve")
+            ex, ey = sc[-1]
+            for r, a in ((7 * s, 60), (3 * s, 255)):           # dernière mesure : point et halo
+                d.ellipse([ex - r, ey - r, ex + r, ey + r], fill=_hex(T.ACCENT, a))
+            self._photo = ImageTk.PhotoImage(img.resize((w, h), Image.LANCZOS))
+            self.itemconfigure(self._img, image=self._photo)
+        else:                                                   # sans Pillow : trait lissé de Tk
+            self.create_line(*[c for p in curve for c in p], fill=T.ACCENT, width=2, smooth=True, tags="label")
+        f = T.F_SMALL
+        for t in ticks:
+            self.create_text(L - T.px(self, 8), to_y(t * unit), text=f"{t:g} {uname}/s" if t else "0", fill=T.FAINT,
+                             font=f, anchor="e", tags="label")
+        from ..model import fmt_clock
+        for frac, anchor in ((0, "nw"), (0.5, "n"), (1, "ne")):
+            self.create_text(L + pw * frac, top_m + ph + T.px(self, 3), text=fmt_clock(self.elapsed * frac),
+                             fill=T.FAINT, font=f, anchor=anchor, tags="label")
         if self.average:
-            y = h - pad - self.average / top * span
-            self.coords(self._avg, 0, y, w, y)
-        self.coords(self._max, w - 2, 0)
-        self.itemconfigure(self._max, text=f"max {fmt_size(int(top))}/s")
+            self.create_text(L + pw - T.px(self, 4), to_y(self.average) - T.px(self, 3),
+                             text=f"moyenne {fmt_size(int(self.average))}/s",
+                             fill=T.MUTED, font=f, anchor="se", tags="label")
+
+    def flush(self):
+        """Dernier rendu, sans limite de fréquence (fin de l'opération)."""
+        self._draw(force=True)
 
 
 class StatsPanel(tk.Frame):
@@ -743,13 +852,16 @@ class StatsPanel(tk.Frame):
     def __init__(self, parent, fields: list[tuple[str, str]], chart: bool = False):
         super().__init__(parent, bg=parent.cget("bg"))
         self.values: dict[str, tk.Label] = {}
+        self.captions: dict[str, tk.Label] = {}
+        self._captions = dict(fields)
         for col, (key, caption) in enumerate(fields):
             card = Card(self, padding=10, bg=T.SURFACE2, border=None, radius=8)
             card.grid(row=0, column=col, sticky="nsew", padx=(0 if col == 0 else T.px(self, 8), 0))
             self.columnconfigure(col, weight=1, uniform="tile")
             tile = card.body
-            tk.Label(tile, text=caption.upper(), bg=T.SURFACE2, fg=T.FAINT, font=T.F_SMALL_B,
-                     anchor="w").pack(fill="x")
+            cap = tk.Label(tile, text=caption.upper(), bg=T.SURFACE2, fg=T.FAINT, font=T.F_SMALL_B, anchor="w")
+            cap.pack(fill="x")
+            self.captions[key] = cap
             v = tk.Label(tile, text="…", bg=T.SURFACE2, fg=T.TEXT, font=T.F_H2, anchor="w")
             v.pack(fill="x")
             self.values[key] = v
@@ -767,20 +879,42 @@ class StatsPanel(tk.Frame):
     def set(self, key: str, text: str, color: str = None):
         self.values[key].configure(text=text, fg=color or T.TEXT)
 
-    def plot(self, speed: float, average: float = 0.0):
+    def set_caption(self, key: str, text: str):
+        self.captions[key].configure(text=text.upper())
+
+    def plot(self, speed: float, average: float = 0.0, elapsed: float = 0.0):
         if self.chart is not None:
             if not self._chart_box.winfo_ismapped():
                 self._chart_box.grid()
-            self.chart.add(speed, average)
+            self.chart.add(speed, average, elapsed)
 
-    def finish(self):
-        """Fin de l'opération : courbe masquée si elle n'a reçu aucune mesure (opération quasi instantanée)."""
-        if self.chart is not None and len(self.chart.vals) < 2:
-            self._chart_box.grid_remove()
+    def finish(self, reading=None, count: str = ""):
+        """Fin de l'opération : bilan dans les tuiles (avancement, vitesse moyenne, durée, vitesse maximale) au
+        lieu de la dernière vitesse mesurée ; courbe complétée, ou masquée si l'opération a été instantanée.
+        reading : dernier relevé RateMeter (None si rien n'a été mesuré)."""
+        from ..progress import fmt_eta, fmt_rate
+        keys = list(self.values)
+        if reading is not None and len(keys) == 4:
+            prog, speed, elapsed, eta = keys
+            if count:
+                self.set(prog, count, T.SUCCESS)
+            self.set_caption(speed, "Vitesse moyenne")
+            self.set(speed, fmt_rate(reading.average) if reading.average else "—", T.ACCENT)
+            self.set_caption(elapsed, "Durée")
+            self.set(elapsed, fmt_eta(reading.elapsed))
+            self.set_caption(eta, "Vitesse max")
+            self.set(eta, fmt_rate(reading.peak) if reading.peak else "—")
+        if self.chart is not None:
+            if len(self.chart.vals) < 2:
+                self._chart_box.grid_remove()
+            else:
+                self.chart.flush()
 
     def reset(self):
         for v in self.values.values():
             v.configure(text="…", fg=T.TEXT)
+        for k, cap in self._captions.items():
+            self.set_caption(k, cap)
         self.note.configure(text="")
         if self.chart is not None:
             self.chart.reset()

@@ -18,7 +18,7 @@ Au premier lancement, Forge411 ouvre ses **paramètres**, rangés par sections :
 | Dossier de sortie | Non | Où sont écrits les `.torrent`, les `.nfo` et les captures. |
 | Dossier de seed | Non | Là où ton client torrent attend les données ; Forge411 vérifie que tes fichiers s'y trouvent. |
 | Uploader certifié | Non | À cocher si tu as déjà 15 torrents validés : voir [Brouillons et historique](Brouillons-et-historique#un-seul-upload-en-attente-tant-que-tu-nes-pas-certifié). |
-| Apparence | Non | **Système** (suit Windows), **Sombre** ou **Clair**, aux couleurs de C411. Appliqué au redémarrage. |
+| Apparence | Non | **Système** (suit Windows), **Sombre** ou **Clair**, aux couleurs de C411. Appliqué tout de suite, sans redémarrer : l'upload en cours est conservé. |
 
 > [!IMPORTANT]
 > Un droit ne s'ajoute pas à une clé API existante : pour en ajouter un, crée une nouvelle clé.

@@ -4,6 +4,7 @@ défaut d'affichage constaté sous Windows.
 """
 
 import ast
+import re
 import unittest
 from pathlib import Path
 
@@ -90,6 +91,54 @@ class UiRulesTests(unittest.TestCase):
         self.assertEqual(len(calls), 1, calls)
         src = (PKG / "ui" / "widgets.py").read_text(encoding="utf-8")
         self.assertIn('if not getattr(root, "_forge_wheel", False):', src)
+
+    def test_stats_tiles_same_order(self):
+        """Hachage, copie et vérification : tuiles dans le même ordre (avancement, vitesse, écoulé, restant)."""
+        src = (PKG / "ui" / "steps.py").read_text(encoding="utf-8")
+        orders = [re.findall(r'\("(\w+)", "', m) for m in re.findall(r"StatsPanel\([^\]]+\]", src)]
+        self.assertEqual(len(orders), 3)
+        for o in orders:
+            self.assertEqual(o[1:], ["speed", "elapsed", "eta"], o)
+
+    def test_no_palette_in_default_arguments(self):
+        """Thème changé à chaud : une couleur en valeur par défaut (bg=T.SURFACE) est figée à l'import et resterait
+        celle de l'ancien thème."""
+        bad = []
+        for f in sorted((PKG / "ui").glob("*.py")):
+            for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
+                if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                    defaults = node.args.defaults + node.args.kw_defaults if isinstance(node, ast.FunctionDef) else []
+                    body = [] if isinstance(node, ast.FunctionDef) else \
+                        [n.value for n in node.body if isinstance(n, ast.Assign)]
+                    for d in defaults + body:
+                        for sub in ast.walk(d) if d is not None else []:
+                            if isinstance(sub, ast.Attribute) and isinstance(sub.value, ast.Name) \
+                                    and sub.value.id == "T" and sub.attr.isupper() and not sub.attr.startswith("F_"):
+                                bad.append(f"{f.name}:{node.lineno} T.{sub.attr}")
+        self.assertEqual(bad, [])
+
+    def test_palette_contrast(self):
+        """Texte lisible dans les deux thèmes (WCAG AA, 4,5:1) : texte, texte secondaire, accent, alertes."""
+        from forge411.ui.theme import PALETTES
+
+        def lum(h):
+            c = [int(h.lstrip("#")[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+            c = [x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4 for x in c]
+            return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+
+        def ratio(a, b):
+            hi, lo = sorted((lum(a), lum(b)), reverse=True)
+            return (hi + 0.05) / (lo + 0.05)
+        low = []
+        for mode, p in PALETTES.items():
+            pairs = [(fg, bg) for fg in ("TEXT", "MUTED", "FAINT", "ACCENT") for bg in ("BG", "SURFACE", "SIDEBAR")]
+            pairs += [("ON_ACCENT", "ACCENT"), ("WARNING", "WARNING_SOFT"), ("ERROR", "ERROR_SOFT"),
+                      ("ACCENT", "ACCENT_SOFT"), ("TEXT", "SURFACE2"), ("MUTED", "SURFACE2")]
+            for fg, bg in pairs:
+                r = ratio(p[fg], p[bg])
+                if r < 4.5:
+                    low.append(f"{mode} {fg}/{bg} {r:.2f}")
+        self.assertEqual(low, [])
 
     def test_tables_use_shared_style(self):
         """Un ttk.Treeview sans style_tree garde la bordure claire et les en-têtes du thème par défaut."""
