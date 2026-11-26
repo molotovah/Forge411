@@ -71,6 +71,7 @@ class Tour:
         Btn(row, "Terminer" if last else "Suivant  →", self.next, kind="primary", small=True).pack(side="right")
         if self.i:
             Btn(row, "←", self.prev, small=True).pack(side="right", padx=(0, 6))
+        card.fit_now()                      # taille réelle de la bulle avant de la placer
         b.update_idletasks()
         bw, bh = b.winfo_width(), b.winfo_height()
         sx, sy = w.winfo_rootx(), w.winfo_rooty()

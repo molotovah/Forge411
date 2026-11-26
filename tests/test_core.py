@@ -1323,6 +1323,21 @@ class ClientHelpTests(unittest.TestCase):
 
 
 
+class CoverSizeTests(unittest.TestCase):
+    """Image de fiche au format de sa base : une pochette d'album carrée n'est plus recadrée en affiche."""
+
+    def test_shapes(self):
+        from forge411.ui.steps import cover_size
+        for scale in (1, 2, 3):
+            w, h = cover_size("musicbrainz", scale)
+            self.assertEqual(w, h)
+            w, h = cover_size("rawg", scale)
+            self.assertGreater(w, h)
+            for prov in ("tmdb", "books", "tpdb", ""):
+                w, h = cover_size(prov, scale)
+                self.assertLess(w, h)
+
+
 class ShotsMissingTests(unittest.TestCase):
     """Encart « Ajouter des captures » : affiché sous le minimum exigé, ou si des captures conseillées manquent."""
 

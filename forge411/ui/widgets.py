@@ -251,6 +251,13 @@ class Card(tk.Canvas):
         if w > int(self.cget("width")):
             self.configure(width=w)
 
+    def fit_now(self):
+        """Ajuste tout de suite la taille au contenu (sinon fait à l'inactivité) : à appeler avant de mesurer
+        une fenêtre pour la positionner (bulle de la visite guidée)."""
+        self.update_idletasks()
+        self._fit()
+        self.update_idletasks()
+
     def _resized(self, e):
         if (e.width, e.height) == self._size:
             return
@@ -748,8 +755,9 @@ class StatsPanel(tk.Frame):
             self.values[key] = v
         self.chart = None
         if chart:
-            box = Card(self, padding=8, bg=T.SURFACE2, border=None, radius=8)
+            box = self._chart_box = Card(self, padding=8, bg=T.SURFACE2, border=None, radius=8)
             box.grid(row=1, column=0, columnspan=len(fields), sticky="ew", pady=(T.px(self, 8), 0))
+            box.grid_remove()                        # affichée à la première mesure
             self.chart = SpeedChart(box.body)
             self.chart.pack(fill="x")
         self.note = tk.Label(self, text="", bg=self.cget("bg"), fg=T.MUTED, font=T.F_SMALL, anchor="w",
@@ -761,7 +769,14 @@ class StatsPanel(tk.Frame):
 
     def plot(self, speed: float, average: float = 0.0):
         if self.chart is not None:
+            if not self._chart_box.winfo_ismapped():
+                self._chart_box.grid()
             self.chart.add(speed, average)
+
+    def finish(self):
+        """Fin de l'opération : courbe masquée si elle n'a reçu aucune mesure (opération quasi instantanée)."""
+        if self.chart is not None and len(self.chart.vals) < 2:
+            self._chart_box.grid_remove()
 
     def reset(self):
         for v in self.values.values():

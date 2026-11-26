@@ -2,6 +2,17 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [SemVer](https://semver.org/lang/fr/).
 
+## [Non publié]
+
+### Corrigé
+- Visite guidée : la bulle était placée d'après une taille provisoire et pouvait sortir de la fenêtre.
+- Pochettes d'album (MusicBrainz) affichées carrées au lieu d'être recadrées en affiche ; images de jeux (RAWG) en paysage dans la liste des résultats aussi.
+- Courbe de vitesse masquée quand le hachage ou la copie est trop rapide pour être mesuré (cadre vide).
+- Résultats de recherche TMDB : type affiché en français (Film, Série) au lieu de movie, tv.
+
+### Documentation
+- Toutes les captures du README et du wiki sont régénérées automatiquement à chaque version, avec des données de démonstration : étapes de l'assistant (film, album, livre, jeu), visite guidée, aide au survol, doublons et slots, mode lot, correction et mode clair.
+
 ## [2.4.0] - 2026-11-26
 
 ### Ajouté

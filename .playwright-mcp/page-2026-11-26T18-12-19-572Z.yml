@@ -1,0 +1,697 @@
+- generic [ref=f2e2]:
+  - generic [ref=f2e3]:
+    - link "Skip to content" [ref=f2e4] [cursor=pointer]:
+      - /url: "#start-of-content"
+    - banner [ref=f2e9]:
+      - heading "Navigation Menu" [level=2] [ref=f2e10]
+      - generic [ref=f2e11]:
+        - link "Homepage" [ref=f2e14] [cursor=pointer]:
+          - /url: /
+        - generic [ref=f2e17]:
+          - navigation "Global" [ref=f2e18]:
+            - list [ref=f2e19]:
+              - listitem [ref=f2e20]:
+                - button "Products" [ref=f2e22] [cursor=pointer]
+              - listitem [ref=f2e25]:
+                - button "Developers" [ref=f2e27] [cursor=pointer]
+              - listitem [ref=f2e30]:
+                - button "Businesses" [ref=f2e32] [cursor=pointer]
+              - listitem [ref=f2e35]:
+                - button "Resources" [ref=f2e37] [cursor=pointer]
+              - listitem [ref=f2e40]:
+                - link "Pricing" [ref=f2e41] [cursor=pointer]:
+                  - /url: https://github.com/pricing
+          - generic [ref=f2e42]:
+            - button "Search or jump to, type / to search" [ref=f2e44] [cursor=pointer]
+            - generic [ref=f2e50]:
+              - link "Sign in" [ref=f2e52] [cursor=pointer]:
+                - /url: /login?return_to=https%3A%2F%2Fgithub.com%2Fmolotovah%2FForge411
+              - link "Sign up" [ref=f2e55] [cursor=pointer]:
+                - /url: /signup?ref_cta=Sign+up&ref_loc=header+logged+out&ref_page=%2F%3Cuser-name%3E%2F%3Crepo-name%3E&source=header-repo&source_repo=molotovah%2FForge411
+              - button "Appearance settings" [ref=f2e58] [cursor=pointer]
+  - main [ref=f2e65]:
+    - generic "Global navigation menu" [ref=f2e68]:
+      - navigation "Breadcrumbs" [ref=f2e71]:
+        - list [ref=f2e72]:
+          - listitem [ref=f2e73]:
+            - link "molotovah" [ref=f2e74] [cursor=pointer]:
+              - /url: /molotovah
+          - listitem [ref=f2e76]:
+            - link "Forge411" [ref=f2e77] [cursor=pointer]:
+              - /url: /molotovah/Forge411
+      - heading "Repository navigation" [level=2] [ref=f2e80]
+      - navigation "Repository" [ref=f2e81]:
+        - list [ref=f2e82]:
+          - listitem [ref=f2e83]:
+            - link "Code" [ref=f2e84] [cursor=pointer]:
+              - /url: /molotovah/Forge411
+          - listitem [ref=f2e89]:
+            - link "Issues" [ref=f2e90] [cursor=pointer]:
+              - /url: /molotovah/Forge411/issues
+          - listitem [ref=f2e96]:
+            - link "Pull requests" [ref=f2e97] [cursor=pointer]:
+              - /url: /molotovah/Forge411/pulls
+          - listitem [ref=f2e102]:
+            - link "Actions" [ref=f2e103] [cursor=pointer]:
+              - /url: /molotovah/Forge411/actions
+          - listitem [ref=f2e108]:
+            - link "Projects" [ref=f2e109] [cursor=pointer]:
+              - /url: /molotovah/Forge411/projects
+          - listitem [ref=f2e114]:
+            - link "Wiki" [ref=f2e115] [cursor=pointer]:
+              - /url: /molotovah/Forge411/wiki
+          - listitem [ref=f2e120]:
+            - link "Security and quality" [ref=f2e121] [cursor=pointer]:
+              - /url: /molotovah/Forge411/security
+          - listitem [ref=f2e126]:
+            - link "Insights" [ref=f2e127] [cursor=pointer]:
+              - /url: /molotovah/Forge411/pulse
+    - generic [ref=f2e144]:
+      - generic [ref=f2e148]:
+        - generic [ref=f2e151]:
+          - img "molotovah" [ref=f2e152]
+          - generic "Forge411" [ref=f2e153]:
+            - strong [ref=f2e154]:
+              - link "Forge411" [ref=f2e155] [cursor=pointer]:
+                - /url: /molotovah/Forge411
+          - generic [ref=f2e156]: Public
+        - list [ref=f2e158]:
+          - listitem [ref=f2e159]:
+            - link "You must be signed in to change notification settings" [ref=f2e160] [cursor=pointer]:
+              - /url: /login?return_to=%2Fmolotovah%2FForge411
+              - generic [ref=f2e161]: Notifications
+          - listitem [ref=f2e163]:
+            - link "You must be signed in to fork a repository" [ref=f2e164] [cursor=pointer]:
+              - /url: /login?return_to=%2Fmolotovah%2FForge411
+              - generic [ref=f2e166]:
+                - text: Fork
+                - generic [aria-hidden] [ref=f2e167]: "0"
+                - generic [ref=f2e168]: (0)
+          - listitem [ref=f2e169]:
+            - link "Star (0)" [ref=f2e170] [cursor=pointer]:
+              - /url: /login?return_to=%2Fmolotovah%2FForge411
+              - generic [ref=f2e172]:
+                - text: Star
+                - generic [aria-hidden] [ref=f2e173]: "0"
+                - generic [ref=f2e174]: (0)
+      - generic [ref=f2e175]:
+        - generic [ref=f2e178]:
+          - generic [ref=f2e179]:
+            - generic [ref=f2e180]:
+              - button "main branch" [ref=f2e182] [cursor=pointer]:
+                - generic [ref=f2e183]: main
+              - generic [ref=f2e187]:
+                - link [ref=f2e188] [cursor=pointer]:
+                  - /url: /molotovah/Forge411/branches
+                  - generic [ref=f2e191]:
+                    - strong [ref=f2e192]: "1"
+                    - text: Branch
+                - link [ref=f2e193] [cursor=pointer]:
+                  - /url: /molotovah/Forge411/tags
+                  - generic [ref=f2e196]:
+                    - strong [ref=f2e197]: "16"
+                    - text: Tags
+            - generic [ref=f2e198]:
+              - combobox "Go to file" [ref=f2e206]
+              - button "Code" [ref=f2e207] [cursor=pointer]
+          - generic [ref=f2e210]:
+            - generic [ref=f2e211]:
+              - generic [ref=f2e213]:
+                - heading "Latest commit" [level=2] [ref=f2e214]
+                - generic [ref=f2e215]:
+                  - generic [ref=f2e217]:
+                    - link [ref=f2e218] [cursor=pointer]:
+                      - /url: /molotovah
+                      - img "molotovah" [ref=f2e219]
+                    - link "commits by molotovah" [ref=f2e220] [cursor=pointer]:
+                      - /url: /molotovah/Forge411/commits?author=molotovah
+                      - text: molotovah
+                  - generic [ref=f2e221]:
+                    - link "README vitrine et wiki GitHub publié depuis docs/wiki" [ref=f2e224] [cursor=pointer]:
+                      - /url: /molotovah/Forge411/commit/4e14c613218eb9c98723848707707a197061a805
+                    - button "success" [ref=f2e225] [cursor=pointer]
+                - generic [ref=f2e228]:
+                  - generic [ref=f2e230]:
+                    - link "Commit 4e14c61" [ref=f2e231] [cursor=pointer]:
+                      - /url: /molotovah/Forge411/commit/4e14c613218eb9c98723848707707a197061a805
+                      - text: 4e14c61
+                    - text: ·
+                    - generic "Nov 26, 2026, 7:11 PM GMT+1" [ref=f2e232]: now
+                  - generic [ref=f2e233]:
+                    - heading "History" [level=2] [ref=f2e234]
+                    - link "31 Commits" [ref=f2e235] [cursor=pointer]:
+                      - /url: /molotovah/Forge411/commits/main/
+              - heading "Folders and files" [level=2] [ref=f2e238]
+              - table "Folders and files" [ref=f2e240]:
+                - rowgroup:
+                  - row "Name Last commit message Last commit date":
+                    - columnheader "Name"
+                    - columnheader "Last commit message"
+                    - columnheader "Last commit date"
+                - rowgroup [ref=f2e241]:
+                  - row [ref=f2e242]:
+                    - cell [ref=f2e243]:
+                      - link ".githooks, (Directory)" [ref=f2e250] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/tree/main/.githooks
+                        - text: .githooks
+                    - cell [ref=f2e251]:
+                      - link "Forge411 2.1.6" [ref=f2e254] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/commit/c96a2077f0b6b38a6dd1678c61774ab7438fb368
+                    - cell "18 hours ago" [ref=f2e255]
+                  - row [ref=f2e257]:
+                    - cell [ref=f2e258]:
+                      - link ".github/workflows, (Directory)" [ref=f2e265] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/tree/main/.github/workflows
+                        - text: .github/workflows
+                    - cell [ref=f2e266]:
+                      - link "README vitrine et wiki GitHub publié depuis docs/wiki" [ref=f2e269] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/commit/4e14c613218eb9c98723848707707a197061a805
+                    - cell "now" [ref=f2e270]
+                  - row [ref=f2e272]:
+                    - cell [ref=f2e273]:
+                      - link "docs, (Directory)" [ref=f2e280] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/tree/main/docs
+                        - text: docs
+                    - cell [ref=f2e281]:
+                      - link "README vitrine et wiki GitHub publié depuis docs/wiki" [ref=f2e284] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/commit/4e14c613218eb9c98723848707707a197061a805
+                    - cell "now" [ref=f2e285]
+                  - row [ref=f2e287]:
+                    - cell [ref=f2e288]:
+                      - link "forge411, (Directory)" [ref=f2e295] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/tree/main/forge411
+                        - text: forge411
+                    - cell [ref=f2e296]:
+                      - link "Forge411 2.4.0" [ref=f2e299] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/commit/614813277518053f1612bbe61a7135e8671ae85a
+                    - cell "12 minutes ago" [ref=f2e300]
+                  - row [ref=f2e302]:
+                    - cell [ref=f2e303]:
+                      - link "tests, (Directory)" [ref=f2e310] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/tree/main/tests
+                        - text: tests
+                    - cell [ref=f2e311]:
+                      - link "README vitrine et wiki GitHub publié depuis docs/wiki" [ref=f2e314] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/commit/4e14c613218eb9c98723848707707a197061a805
+                    - cell "now" [ref=f2e315]
+                  - row [ref=f2e317]:
+                    - cell [ref=f2e318]:
+                      - link "tools, (Directory)" [ref=f2e325] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/tree/main/tools
+                        - text: tools
+                    - cell [ref=f2e326]:
+                      - link "README vitrine et wiki GitHub publié depuis docs/wiki" [ref=f2e329] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/commit/4e14c613218eb9c98723848707707a197061a805
+                    - cell "now" [ref=f2e330]
+                  - row [ref=f2e332]:
+                    - cell [ref=f2e333]:
+                      - link ".gitignore, (File)" [ref=f2e340] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/blob/main/.gitignore
+                        - text: .gitignore
+                    - cell [ref=f2e341]:
+                      - link "Forge411 2.0.0" [ref=f2e344] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/commit/3a7dfcce50bfff32816601c60bc946bd91b75537
+                    - cell "yesterday" [ref=f2e345]
+                  - row [ref=f2e347]:
+                    - cell [ref=f2e348]:
+                      - link "CHANGELOG.md, (File)" [ref=f2e355] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/blob/main/CHANGELOG.md
+                        - text: CHANGELOG.md
+                    - cell [ref=f2e356]:
+                      - link "Forge411 2.4.0" [ref=f2e359] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/commit/614813277518053f1612bbe61a7135e8671ae85a
+                    - cell "12 minutes ago" [ref=f2e360]
+                  - row [ref=f2e362]:
+                    - cell [ref=f2e363]:
+                      - link "CLAUDE.md, (File)" [ref=f2e370] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/blob/main/CLAUDE.md
+                        - text: CLAUDE.md
+                    - cell [ref=f2e371]:
+                      - link "README vitrine et wiki GitHub publié depuis docs/wiki" [ref=f2e374] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/commit/4e14c613218eb9c98723848707707a197061a805
+                    - cell "now" [ref=f2e375]
+                  - row [ref=f2e377]:
+                    - cell [ref=f2e378]:
+                      - link "Forge411.pyw, (File)" [ref=f2e385] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/blob/main/Forge411.pyw
+                        - text: Forge411.pyw
+                    - cell [ref=f2e386]:
+                      - link "Forge411 2.0.0" [ref=f2e389] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/commit/3a7dfcce50bfff32816601c60bc946bd91b75537
+                    - cell "yesterday" [ref=f2e390]
+                  - row [ref=f2e392]:
+                    - cell [ref=f2e393]:
+                      - link "LICENSE, (File)" [ref=f2e400] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/blob/main/LICENSE
+                        - text: LICENSE
+                    - cell [ref=f2e401]:
+                      - link "Forge411 2.0.0" [ref=f2e404] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/commit/3a7dfcce50bfff32816601c60bc946bd91b75537
+                    - cell "yesterday" [ref=f2e405]
+                  - row [ref=f2e407]:
+                    - cell [ref=f2e408]:
+                      - link "NOTICE, (File)" [ref=f2e415] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/blob/main/NOTICE
+                        - text: NOTICE
+                    - cell [ref=f2e416]:
+                      - link "Forge411 2.0.0" [ref=f2e419] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/commit/3a7dfcce50bfff32816601c60bc946bd91b75537
+                    - cell "yesterday" [ref=f2e420]
+                  - row [ref=f2e422]:
+                    - cell [ref=f2e423]:
+                      - link "README.md, (File)" [ref=f2e430] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/blob/main/README.md
+                        - text: README.md
+                    - cell [ref=f2e431]:
+                      - link "README vitrine et wiki GitHub publié depuis docs/wiki" [ref=f2e434] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/commit/4e14c613218eb9c98723848707707a197061a805
+                    - cell "now" [ref=f2e435]
+                  - row [ref=f2e437]:
+                    - cell [ref=f2e438]:
+                      - link "build.bat, (File)" [ref=f2e445] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/blob/main/build.bat
+                        - text: build.bat
+                    - cell [ref=f2e446]:
+                      - link "Forge411 2.0.0" [ref=f2e449] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/commit/3a7dfcce50bfff32816601c60bc946bd91b75537
+                    - cell "yesterday" [ref=f2e450]
+                  - row [ref=f2e452]:
+                    - cell [ref=f2e453]:
+                      - link "forge411.spec, (File)" [ref=f2e460] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/blob/main/forge411.spec
+                        - text: forge411.spec
+                    - cell [ref=f2e461]:
+                      - link "Forge411 2.0.0" [ref=f2e464] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/commit/3a7dfcce50bfff32816601c60bc946bd91b75537
+                    - cell "yesterday" [ref=f2e465]
+                  - row [ref=f2e467]:
+                    - cell [ref=f2e468]:
+                      - link "install.bat, (File)" [ref=f2e475] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/blob/main/install.bat
+                        - text: install.bat
+                    - cell [ref=f2e476]:
+                      - link "Forge411 2.0.0" [ref=f2e479] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/commit/3a7dfcce50bfff32816601c60bc946bd91b75537
+                    - cell "yesterday" [ref=f2e480]
+                  - row [ref=f2e482]:
+                    - cell [ref=f2e483]:
+                      - link "requirements.txt, (File)" [ref=f2e490] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/blob/main/requirements.txt
+                        - text: requirements.txt
+                    - cell [ref=f2e491]:
+                      - link "Forge411 2.0.0" [ref=f2e494] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/commit/3a7dfcce50bfff32816601c60bc946bd91b75537
+                    - cell "yesterday" [ref=f2e495]
+                  - row [ref=f2e497]:
+                    - cell [ref=f2e498]:
+                      - link "version_info.txt, (File)" [ref=f2e505] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/blob/main/version_info.txt
+                        - text: version_info.txt
+                    - cell [ref=f2e506]:
+                      - link "Forge411 2.4.0" [ref=f2e509] [cursor=pointer]:
+                        - /url: /molotovah/Forge411/commit/614813277518053f1612bbe61a7135e8671ae85a
+                    - cell "12 minutes ago" [ref=f2e510]
+            - generic [ref=f2e513]:
+              - generic [ref=f2e514]:
+                - heading "Repository files navigation" [level=2] [ref=f2e515]
+                - navigation "Repository files" [ref=f2e516]:
+                  - list [ref=f2e517]:
+                    - listitem [ref=f2e518]:
+                      - link "README" [ref=f2e519] [cursor=pointer]:
+                        - /url: "#"
+                    - listitem [ref=f2e524]:
+                      - link "GPL-3.0 license" [ref=f2e525] [cursor=pointer]:
+                        - /url: "#"
+                - button "Outline" [ref=f2e530] [cursor=pointer]
+              - article [ref=f2e534]:
+                - generic [ref=f2e535]:
+                  - link [ref=f2e536] [cursor=pointer]:
+                    - /url: /molotovah/Forge411/blob/main/forge411/assets/forge411.png
+                    - img "Forge411" [ref=f2e537]
+                  - generic [ref=f2e538]:
+                    - heading "Forge411" [level=1] [ref=f2e539]
+                    - 'link "Permalink: Forge411" [ref=f2e540] [cursor=pointer]':
+                      - /url: "#forge411"
+                  - paragraph [ref=f2e543]:
+                    - strong [ref=f2e544]: "L'outil d'upload pour C411, en français : du fichier au torrent en seed, en quelques clics."
+                  - paragraph [ref=f2e545]:
+                    - link [ref=f2e546] [cursor=pointer]:
+                      - /url: /molotovah/Forge411/releases/latest
+                      - img "Dernière version" [ref=f2e547]
+                    - link [ref=f2e548] [cursor=pointer]:
+                      - /url: /molotovah/Forge411/releases
+                      - img "Téléchargements" [ref=f2e549]
+                    - link [ref=f2e550] [cursor=pointer]:
+                      - /url: /molotovah/Forge411/actions/workflows/tests.yml
+                      - img "Tests" [ref=f2e551]
+                    - link [ref=f2e552] [cursor=pointer]:
+                      - /url: /molotovah/Forge411/blob/main/LICENSE
+                      - img "Licence GPL-3.0" [ref=f2e553]
+                    - link [ref=f2e554] [cursor=pointer]:
+                      - /url: https://camo.githubusercontent.com/7af7388f9b6d236d99e85251b3a6a8c8000327e7fcff73579219097da335ce2f/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f57696e646f77732d3030373844363f6c6f676f3d77696e646f7773266c6f676f436f6c6f723d7768697465
+                      - img "Windows" [ref=f2e555]
+                  - paragraph [ref=f2e556]:
+                    - link [ref=f2e557] [cursor=pointer]:
+                      - /url: /molotovah/Forge411/releases/latest
+                      - strong [ref=f2e558]: ⬇ Télécharger pour Windows
+                    - text: ·
+                    - link "📖 Wiki" [ref=f2e559] [cursor=pointer]:
+                      - /url: /molotovah/Forge411/wiki
+                    - text: ·
+                    - link "🆕 Nouveautés" [ref=f2e560] [cursor=pointer]:
+                      - /url: /molotovah/Forge411/blob/main/CHANGELOG.md
+                    - text: ·
+                    - link "🐞 Signaler un problème" [ref=f2e561] [cursor=pointer]:
+                      - /url: /molotovah/Forge411/issues
+                  - link [ref=f2e562] [cursor=pointer]:
+                    - /url: /molotovah/Forge411/blob/main/docs/screenshots/04-identification.png
+                    - 'img "Forge411 : identification d''un film sur TMDB" [ref=f2e563]'
+                - paragraph [ref=f2e564]:
+                  - text: Forge411 analyse ce que tu partages, retrouve la fiche, nomme la release selon les règles C411, écrit le NFO et la présentation, crée le torrent, vérifie le seed dans ton client et envoie le tout.
+                  - strong [ref=f2e565]: Tu n'as qu'à vérifier.
+                  - text: Gratuit et open source.
+                - generic [ref=f2e566]:
+                  - paragraph [ref=f2e567]: Note
+                  - paragraph [ref=f2e570]: Forge411 est un outil indépendant, non affilié à C411.
+                - generic [ref=f2e571]:
+                  - heading "Ce que Forge411 fait pour toi" [level=2] [ref=f2e572]
+                  - 'link "Permalink: Ce que Forge411 fait pour toi" [ref=f2e573] [cursor=pointer]':
+                    - /url: "#ce-que-forge411-fait-pour-toi"
+                - table [ref=f2e577]:
+                  - rowgroup [ref=f2e578]:
+                    - row [ref=f2e579]:
+                      - columnheader [ref=f2e580]
+                      - columnheader [ref=f2e581]
+                  - rowgroup [ref=f2e582]:
+                    - row [ref=f2e583]:
+                      - cell [ref=f2e584]:
+                        - text: 🔎
+                        - strong [ref=f2e585]: Reconnaît et lit
+                      - 'cell "Film, épisode, saison, album, livre, BD, jeu, application, ROM, carte GPS, modèle 3D, XXX : pistes audio et sous-titres, tags, métadonnées, type de release." [ref=f2e586]'
+                    - row [ref=f2e587]:
+                      - cell [ref=f2e588]:
+                        - text: 🗂️
+                        - strong [ref=f2e589]: Retrouve la fiche
+                      - 'cell "TMDB, MusicBrainz, Open Library, RAWG, ThePornDB : titre français, résumé, affiche, genres." [ref=f2e590]'
+                    - row [ref=f2e591]:
+                      - cell [ref=f2e592]:
+                        - text: 🏷️
+                        - strong [ref=f2e593]: Nomme la release
+                      - cell "Selon le modèle C411 de la catégorie (HDLight/4KLight selon le débit, WEB ou WEBRip, codec…), vérifié pendant que tu le modifies." [ref=f2e594]
+                    - row [ref=f2e595]:
+                      - cell [ref=f2e596]:
+                        - text: 📝
+                        - strong [ref=f2e597]: Écrit NFO et présentation
+                      - cell "NFO et BBCode prêts à l'emploi, options C411 préremplies, captures d'écran hébergées sur un site accepté." [ref=f2e598]
+                    - row [ref=f2e599]:
+                      - cell [ref=f2e600]:
+                        - text: 🧲
+                        - strong [ref=f2e601]: Crée le torrent et vérifie le seed
+                      - cell [ref=f2e602]:
+                        - text: Torrent privé, source
+                        - code [ref=f2e603]: C411
+                        - text: ", bonne taille de pièce ; ajouté à qBittorrent, Transmission ou Deluge (PC, NAS, Docker ou seedbox)."
+                    - row [ref=f2e604]:
+                      - cell [ref=f2e605]:
+                        - text: 🛡️
+                        - strong [ref=f2e606]: Te prévient avant C411
+                      - cell "Doublons et slots, formats interdits, saison incomplète, team bannie, débit trop bas, detag, captures manquantes, un seul upload en attente tant que tu n'es pas certifié…" [ref=f2e607]
+                    - row [ref=f2e608]:
+                      - cell [ref=f2e609]:
+                        - text: 📬
+                        - strong [ref=f2e610]: Envoie et suit
+                      - cell "Brouillon ou publication directe, mode lot, historique avec suivi de la validation par la Team Pending, correction guidée." [ref=f2e611]
+                - group [ref=f2e612]:
+                  - generic "Types de contenu pris en charge" [ref=f2e613] [cursor=pointer]
+                - generic [ref=f2e614]:
+                  - heading "Aperçu" [level=2] [ref=f2e615]
+                  - 'link "Permalink: Aperçu" [ref=f2e616] [cursor=pointer]':
+                    - /url: "#aperçu"
+                - table [ref=f2e620]:
+                  - rowgroup [ref=f2e621]:
+                    - row [ref=f2e622]:
+                      - cell [ref=f2e623]:
+                        - img "Paramètres du client torrent" [ref=f2e626]
+                        - paragraph [ref=f2e627]: "Client torrent : PC, NAS, Docker ou seedbox"
+                      - cell [ref=f2e628]:
+                        - img "Historique des uploads" [ref=f2e631]
+                        - paragraph [ref=f2e632]: "Historique : suivi de la validation C411"
+                    - row [ref=f2e633]:
+                      - cell [ref=f2e634]:
+                        - img "Mon profil C411" [ref=f2e637]
+                        - paragraph [ref=f2e638]: "Mon profil : niveau, ratio, Zen, évolution"
+                      - cell [ref=f2e639]:
+                        - img "Brouillons C411" [ref=f2e642]
+                        - paragraph [ref=f2e643]: "Brouillons C411 : à relire et publier sur le site"
+                - generic [ref=f2e644]:
+                  - heading "Démarrage rapide" [level=2] [ref=f2e645]
+                  - 'link "Permalink: Démarrage rapide" [ref=f2e646] [cursor=pointer]':
+                    - /url: "#démarrage-rapide"
+                - list [ref=f2e649]:
+                  - listitem [ref=f2e650]:
+                    - strong [ref=f2e651]: Télécharge
+                    - link [ref=f2e652] [cursor=pointer]:
+                      - /url: /molotovah/Forge411/releases/latest
+                      - code [ref=f2e653]: Forge411.exe
+                    - text: et lance-le. Rien d'autre à installer.
+                  - listitem [ref=f2e654]:
+                    - strong [ref=f2e655]: Renseigne
+                    - text: ta clé API C411 (profil › Intégrations, droit
+                    - strong [ref=f2e656]: brouillons
+                    - text: ) et ton URL d'annonce. Les autres réglages peuvent attendre.
+                  - listitem [ref=f2e657]:
+                    - strong [ref=f2e658]: Choisis
+                    - text: "un fichier ou un dossier : Forge411 le reconnaît et l'analyse."
+                  - listitem [ref=f2e659]:
+                    - strong [ref=f2e660]: Suis les 6 étapes
+                    - text: "de l'assistant : fiche, nom, NFO, présentation, puis torrent."
+                  - listitem [ref=f2e661]:
+                    - strong [ref=f2e662]: Commence par un brouillon
+                    - text: ": tu le relis et le publies depuis la page d'upload de C411."
+                - generic [ref=f2e663]:
+                  - paragraph [ref=f2e664]: Note
+                  - paragraph [ref=f2e667]:
+                    - text: "Au premier lancement, Windows peut afficher « Windows a protégé votre ordinateur » : l'exécutable n'est pas signé. Clique sur"
+                    - strong [ref=f2e668]: Informations complémentaires
+                    - text: ", puis"
+                    - strong [ref=f2e669]: Exécuter quand même
+                    - text: .
+                - generic [ref=f2e670]:
+                  - paragraph [ref=f2e671]: Caution
+                  - paragraph [ref=f2e674]: Ton URL d'annonce identifie ton compte C411. Ne la partage jamais, ni en capture d'écran.
+                - paragraph [ref=f2e675]:
+                  - text: "Forge411 se met ensuite à jour tout seul. Depuis le code source (Windows, Linux, macOS) : voir"
+                  - link "Installation" [ref=f2e676] [cursor=pointer]:
+                    - /url: /molotovah/Forge411/wiki/Installation
+                  - text: .
+                - generic [ref=f2e677]:
+                  - heading "Documentation" [level=2] [ref=f2e678]
+                  - 'link "Permalink: Documentation" [ref=f2e679] [cursor=pointer]':
+                    - /url: "#documentation"
+                - paragraph [ref=f2e682]:
+                  - text: Le guide complet est dans le
+                  - strong [ref=f2e683]:
+                    - link "wiki" [ref=f2e684] [cursor=pointer]:
+                      - /url: /molotovah/Forge411/wiki
+                  - text: ":"
+                - table [ref=f2e686]:
+                  - rowgroup [ref=f2e687]:
+                    - row [ref=f2e688]:
+                      - columnheader "Bien démarrer" [ref=f2e689]
+                      - columnheader "Au quotidien" [ref=f2e690]
+                      - columnheader "Aide" [ref=f2e691]
+                  - rowgroup [ref=f2e692]:
+                    - row [ref=f2e693]:
+                      - cell [ref=f2e694]:
+                        - link "Installation" [ref=f2e695] [cursor=pointer]:
+                          - /url: /molotovah/Forge411/wiki/Installation
+                      - cell [ref=f2e696]:
+                        - link "Mode lot" [ref=f2e697] [cursor=pointer]:
+                          - /url: /molotovah/Forge411/wiki/Mode-lot
+                      - cell [ref=f2e698]:
+                        - link "Questions fréquentes" [ref=f2e699] [cursor=pointer]:
+                          - /url: /molotovah/Forge411/wiki/Questions-fr%C3%A9quentes
+                    - row [ref=f2e700]:
+                      - cell [ref=f2e701]:
+                        - link "Premier lancement" [ref=f2e702] [cursor=pointer]:
+                          - /url: /molotovah/Forge411/wiki/Premier-lancement
+                      - cell [ref=f2e703]:
+                        - link "Brouillons et historique" [ref=f2e704] [cursor=pointer]:
+                          - /url: /molotovah/Forge411/wiki/Brouillons-et-historique
+                      - cell [ref=f2e705]:
+                        - link "Confidentialité" [ref=f2e706] [cursor=pointer]:
+                          - /url: /molotovah/Forge411/wiki/Confidentialit%C3%A9
+                    - row [ref=f2e707]:
+                      - cell [ref=f2e708]:
+                        - link "Assistant pas à pas" [ref=f2e709] [cursor=pointer]:
+                          - /url: /molotovah/Forge411/wiki/Assistant-pas-%C3%A0-pas
+                      - cell [ref=f2e710]:
+                        - link "Corriger une validation" [ref=f2e711] [cursor=pointer]:
+                          - /url: /molotovah/Forge411/wiki/Corriger-une-validation
+                      - cell [ref=f2e712]:
+                        - link "Mises à jour" [ref=f2e713] [cursor=pointer]:
+                          - /url: /molotovah/Forge411/wiki/Mises-%C3%A0-jour
+                    - row [ref=f2e714]:
+                      - cell [ref=f2e715]:
+                        - link "Client torrent et seed" [ref=f2e716] [cursor=pointer]:
+                          - /url: /molotovah/Forge411/wiki/Client-torrent-et-seed
+                      - cell [ref=f2e717]:
+                        - link "Doublons et slots" [ref=f2e718] [cursor=pointer]:
+                          - /url: /molotovah/Forge411/wiki/Doublons-et-slots
+                      - cell [ref=f2e719]:
+                        - link "Développement" [ref=f2e720] [cursor=pointer]:
+                          - /url: /molotovah/Forge411/wiki/D%C3%A9veloppement
+                    - row [ref=f2e721]:
+                      - cell [ref=f2e722]
+                      - cell [ref=f2e723]:
+                        - link "Captures d'écran" [ref=f2e724] [cursor=pointer]:
+                          - /url: /molotovah/Forge411/wiki/Captures-d%E2%80%99%C3%A9cran
+                        - text: ·
+                        - link "Mon profil" [ref=f2e725] [cursor=pointer]:
+                          - /url: /molotovah/Forge411/wiki/Mon-profil
+                      - cell [ref=f2e726]
+                - group [ref=f2e727]:
+                  - generic "Confidentialité" [ref=f2e728] [cursor=pointer]
+                - generic [ref=f2e729]:
+                  - heading "Contribuer" [level=2] [ref=f2e730]
+                  - 'link "Permalink: Contribuer" [ref=f2e731] [cursor=pointer]':
+                    - /url: "#contribuer"
+                - paragraph [ref=f2e734]:
+                  - text: Les problèmes et idées se signalent dans les
+                  - link "issues" [ref=f2e735] [cursor=pointer]:
+                    - /url: /molotovah/Forge411/issues
+                  - text: ": joins le journal"
+                  - code [ref=f2e736]: forge411.log
+                  - text: (
+                  - code [ref=f2e737]: "%APPDATA%\\Forge411"
+                  - text: "). Architecture, tests et compilation :"
+                  - link "docs/DEVELOPPEMENT.md" [ref=f2e738] [cursor=pointer]:
+                    - /url: /molotovah/Forge411/blob/main/docs/DEVELOPPEMENT.md
+                  - text: . Le wiki se modifie dans
+                  - link [ref=f2e739] [cursor=pointer]:
+                    - /url: /molotovah/Forge411/blob/main/docs/wiki
+                    - code [ref=f2e740]: docs/wiki/
+                  - text: par pull request.
+                - generic [ref=f2e741]:
+                  - heading "Licence" [level=2] [ref=f2e742]
+                  - 'link "Permalink: Licence" [ref=f2e743] [cursor=pointer]':
+                    - /url: "#licence"
+                - paragraph [ref=f2e746]:
+                  - text: Développé par
+                  - link "molotovah" [ref=f2e747] [cursor=pointer]:
+                    - /url: https://github.com/molotovah
+                  - text: . Logiciel libre sous
+                  - link "GNU GPL version 3" [ref=f2e748] [cursor=pointer]:
+                    - /url: /molotovah/Forge411/blob/main/LICENSE
+                  - text: ", avec les conditions supplémentaires de l'article 7 décrites dans"
+                  - link "NOTICE" [ref=f2e749] [cursor=pointer]:
+                    - /url: /molotovah/Forge411/blob/main/NOTICE
+                  - text: ": une version modifiée reste sous GPL, garde la mention « Forge411 par molotovah » visible dans son interface et se présente comme modifiée."
+                - paragraph [ref=f2e750]: Ce produit utilise l'API TMDB mais n'est ni approuvé ni certifié par TMDB.
+                - paragraph [ref=f2e751]:
+                  - subscript [ref=f2e752]: Outil d'upload C411 · créateur de torrent privé · générateur de NFO · générateur de présentation BBCode · nommage des releases · MediaInfo · TMDB · MusicBrainz · RAWG · Open Library · qBittorrent · seed automatique · tracker privé français · uploader torrent Windows
+        - generic [ref=f2e755]:
+          - generic [ref=f2e756]:
+            - heading "About" [level=2] [ref=f2e757]
+            - paragraph [ref=f2e758]: "Outil d'upload pour C411 en français : crée le torrent, génère le NFO et la présentation BBCode, nomme la release selon les règles et publie en brouillon ou direct. Films, séries, musique, ebooks, jeux, applis. Windows, gratuit."
+            - heading "Topics" [level=3] [ref=f2e759]
+            - generic [ref=f2e760]:
+              - link "bbcode" [ref=f2e761] [cursor=pointer]:
+                - /url: /topics/bbcode
+              - link "c411" [ref=f2e762] [cursor=pointer]:
+                - /url: /topics/c411
+              - link "francais" [ref=f2e763] [cursor=pointer]:
+                - /url: /topics/francais
+              - link "french" [ref=f2e764] [cursor=pointer]:
+                - /url: /topics/french
+              - link "mediainfo" [ref=f2e765] [cursor=pointer]:
+                - /url: /topics/mediainfo
+              - link "musicbrainz" [ref=f2e766] [cursor=pointer]:
+                - /url: /topics/musicbrainz
+              - link "nfo" [ref=f2e767] [cursor=pointer]:
+                - /url: /topics/nfo
+              - link "nfo-generator" [ref=f2e768] [cursor=pointer]:
+                - /url: /topics/nfo-generator
+              - link "private-tracker" [ref=f2e769] [cursor=pointer]:
+                - /url: /topics/private-tracker
+              - link "python" [ref=f2e770] [cursor=pointer]:
+                - /url: /topics/python
+              - link "qbittorrent" [ref=f2e771] [cursor=pointer]:
+                - /url: /topics/qbittorrent
+              - link "rawg" [ref=f2e772] [cursor=pointer]:
+                - /url: /topics/rawg
+              - link "tkinter" [ref=f2e773] [cursor=pointer]:
+                - /url: /topics/tkinter
+              - link "tmdb" [ref=f2e774] [cursor=pointer]:
+                - /url: /topics/tmdb
+              - link "torrent" [ref=f2e775] [cursor=pointer]:
+                - /url: /topics/torrent
+              - link "torrent-creator" [ref=f2e776] [cursor=pointer]:
+                - /url: /topics/torrent-creator
+              - link "uploader" [ref=f2e777] [cursor=pointer]:
+                - /url: /topics/uploader
+              - link "windows" [ref=f2e778] [cursor=pointer]:
+                - /url: /topics/windows
+            - heading "Resources" [level=3] [ref=f2e779]
+            - link "Readme" [ref=f2e781] [cursor=pointer]:
+              - /url: "#readme-ov-file"
+            - link "GPL-3.0 license" [ref=f2e785] [cursor=pointer]:
+              - /url: "#GPL-3.0-1-ov-file"
+            - generic [ref=f2e788]:
+              - link "Activity" [ref=f2e791] [cursor=pointer]:
+                - /url: /molotovah/Forge411/activity
+              - generic [ref=f2e794]:
+                - heading "Stars" [level=3] [ref=f2e795]
+                - generic [ref=f2e797]:
+                  - strong [ref=f2e800]: "0"
+                  - text: stars
+                - heading "Watchers" [level=3] [ref=f2e801]
+                - generic [ref=f2e803]:
+                  - strong [ref=f2e806]: "0"
+                  - text: watching
+                - heading "Forks" [level=3] [ref=f2e807]
+                - link [ref=f2e809] [cursor=pointer]:
+                  - /url: /molotovah/Forge411/forks
+                  - strong [ref=f2e813]: "0"
+                  - text: forks
+            - link "Report repository" [ref=f2e815] [cursor=pointer]:
+              - /url: /contact/report-content?content_url=https%3A%2F%2Fgithub.com%2Fmolotovah%2FForge411&report=molotovah+%28user%29
+          - heading "Releases" [level=2] [ref=f2e817]
+          - heading "Packages" [level=2] [ref=f2e821]
+          - heading "Contributors" [level=2] [ref=f2e824]
+          - heading "Languages" [level=2] [ref=f2e827]
+  - contentinfo [ref=f2e830]:
+    - heading "Footer" [level=2] [ref=f2e831]
+    - generic [ref=f2e832]:
+      - generic [ref=f2e833]:
+        - link "GitHub Homepage" [ref=f2e834] [cursor=pointer]:
+          - /url: https://github.com
+        - generic [ref=f2e837]: © 2026 GitHub, Inc.
+      - navigation "Footer" [ref=f2e838]:
+        - heading "Footer navigation" [level=3] [ref=f2e839]
+        - list "Footer navigation" [ref=f2e840]:
+          - listitem [ref=f2e841]:
+            - link "Terms" [ref=f2e842] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/github-terms/github-terms-of-service
+          - listitem [ref=f2e843]:
+            - link "Privacy" [ref=f2e844] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/privacy-policies/github-privacy-statement
+          - listitem [ref=f2e845]:
+            - link "Security" [ref=f2e846] [cursor=pointer]:
+              - /url: https://github.com/security
+          - listitem [ref=f2e847]:
+            - link "Status" [ref=f2e848] [cursor=pointer]:
+              - /url: https://www.githubstatus.com/
+          - listitem [ref=f2e849]:
+            - link "Community" [ref=f2e850] [cursor=pointer]:
+              - /url: https://github.community/
+          - listitem [ref=f2e851]:
+            - link "Docs" [ref=f2e852] [cursor=pointer]:
+              - /url: https://docs.github.com/
+          - listitem [ref=f2e853]:
+            - link "Contact" [ref=f2e854] [cursor=pointer]:
+              - /url: https://support.github.com?tags=dotcom-footer
+          - listitem [ref=f2e855]:
+            - button "Manage cookies" [ref=f2e857] [cursor=pointer]
+          - listitem [ref=f2e858]:
+            - button "Do not share my personal information" [ref=f2e860] [cursor=pointer]

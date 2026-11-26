@@ -14,7 +14,10 @@
 
 [**⬇ Télécharger pour Windows**](../../releases/latest) · [📖 Wiki](../../wiki) · [🆕 Nouveautés](CHANGELOG.md) · [🐞 Signaler un problème](../../issues)
 
-<img src="docs/screenshots/04-identification.png" width="820" alt="Forge411 : identification d'un film sur TMDB">
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/04-identification-clair.png">
+  <img src="docs/screenshots/04-identification.png" width="820" alt="Forge411 : identification d'un film sur TMDB">
+</picture>
 
 </div>
 

@@ -82,6 +82,21 @@ class Step(tk.Frame):
             c.destroy()
 
 
+# Types bruts des bases en ligne (TMDB : movie, tv) affichés en français
+KIND_LABELS = {"movie": "Film", "tv": "Série"}
+
+
+def cover_size(provider: str, scale: int) -> tuple:
+    """Taille d'affichage d'une image de fiche, au format de sa base : pochette carrée (MusicBrainz), capture de
+    jeu en paysage (RAWG), affiche ou couverture en portrait (TMDB, Open Library…). scale : 1 vignette de liste,
+    2 récapitulatif, 3 fiche détaillée."""
+    if provider == "musicbrainz":
+        return {1: (78, 78), 2: (100, 100), 3: (160, 160)}[scale]
+    if provider == "rawg":
+        return {1: (110, 62), 2: (142, 80), 3: (200, 112)}[scale]
+    return {1: (62, 93), 2: (80, 120), 3: (120, 180)}[scale]
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # 1. Source
 # ═══════════════════════════════════════════════════════════════════════════
@@ -299,6 +314,7 @@ class SourceStep(Step):
 
         def ok(_):
             r = last[0]
+            self.move_stats.finish()
             self._stop_loading()
             fs.remap_paths(self.s.analysis, old_path, src.path)   # captures, NFO… lisent la vidéo au nouvel endroit
             self.app.invalidate_torrent()
@@ -466,14 +482,15 @@ class IdentifyStep(Step):
             label(inner, "Aucun résultat. Essaie un autre titre, sans l'année, ou passe en saisie manuelle.",
                   fg=T.MUTED).pack(fill="x")
             return
+        tw, th = cover_size(s.profile.provider_for(s.ctx()) if s.profile else "", 1)
         for m in s.matches:
             chosen = bool(s.ident and s.ident.provider and s.ident.id == m.id.split(":", 1)[-1])
             bg = T.SURFACE2 if chosen else T.SURFACE
             card = Card(inner, padding=10, bg=bg, border=T.ACCENT if chosen else T.BORDER, cursor="hand2")
             card.pack(fill="x", pady=(0, 8))
-            img = tk.Label(card.body, bg=bg, image=Images.placeholder(62, 93))
-            img.pack(side="left")
-            Images.load(m.image, 62, 93, lambda p, w=img: w.winfo_exists() and w.configure(image=p))
+            img = tk.Label(card.body, bg=bg, image=Images.placeholder(tw, th))
+            img.pack(side="left", anchor="n")
+            Images.load(m.image, tw, th, lambda p, w=img: w.winfo_exists() and w.configure(image=p))
             txt = tk.Frame(card.body, bg=bg)
             txt.pack(side="left", fill="both", expand=True, padx=(10, 0))
             top = tk.Frame(txt, bg=bg)
@@ -482,7 +499,7 @@ class IdentifyStep(Step):
             if m.year:
                 label(top, f"  {m.year}", fg=T.MUTED).pack(side="left")
             if m.kind:
-                badge(top, m.kind, "accent").pack(side="right")
+                badge(top, KIND_LABELS.get(m.kind.lower(), m.kind), "accent").pack(side="right")
             if m.subtitle:
                 autowrap(label(txt, m.subtitle, fg=T.MUTED, font=T.F_SMALL)).pack(fill="x")
             if m.overview:
@@ -576,7 +593,7 @@ class IdentifyStep(Step):
         top = tk.Frame(b, bg=T.SURFACE)
         top.pack(fill="x")
         wide = d.provider == "rawg"
-        w, h = (200, 112) if wide else (120, 180)
+        w, h = cover_size(d.provider, 3)
         img = tk.Label(top, bg=T.SURFACE, image=Images.placeholder(w, h))
         img.pack(side="top" if wide else "left", anchor="w")
         Images.load(d.image, w, h, lambda p: img.winfo_exists() and img.configure(image=p))
@@ -1462,8 +1479,7 @@ class PublishStep(Step):
     def render_recap(self):
         self.clear(self.recap)
         s = self.s
-        wide = s.ident and s.ident.provider == "rawg"
-        w, h = (142, 80) if wide else (80, 120)
+        w, h = cover_size(s.ident.provider if s.ident else "", 2)
         img = tk.Label(self.recap, bg=T.SURFACE, image=Images.placeholder(w, h))
         img.pack(side="left", anchor="n")
         if s.ident and s.ident.image:
@@ -1620,6 +1636,7 @@ class PublishStep(Step):
         self.tor_stats.set("pieces", f"{count} / {count}", T.SUCCESS)
         self.tor_stats.note.configure(text=f"Hachage terminé en {fmt_eta(r.elapsed)}, vitesse moyenne "
                                            f"{fmt_rate(r.average) if r.average else '—'}.", fg=T.MUTED)
+        self.tor_stats.finish()
         self._tor_meter = None
 
     def _done_torrent(self):
