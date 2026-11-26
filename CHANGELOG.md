@@ -2,6 +2,12 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [SemVer](https://semver.org/lang/fr/).
 
+## [Non publié]
+
+### Corrigé
+- Menu latéral : la ligne cliquée (Historique, Mon profil…) restait surlignée après la fermeture de sa fenêtre.
+- Bandeau de mise à jour : flèche affichée en carré (symbole absent de la police) remplacée.
+
 ## [2.1.7] - 2026-11-26
 
 ### Ajouté

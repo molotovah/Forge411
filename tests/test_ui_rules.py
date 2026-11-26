@@ -12,7 +12,7 @@ UI_FILES = sorted((PKG / "ui").glob("*.py")) + sorted((PKG / "profiles").glob("*
 
 # Caractères non latins sûrs dans les polices de texte (Segoe UI) : au-delà, Windows prend une police de
 # secours, mal alignée ou affichée en carré (« ⟳ Actualiser » des brouillons et du profil).
-SAFE_SYMBOLS = set("…·«»’—–→←↗✓✕×•▾▴")
+SAFE_SYMBOLS = set("…·«»’—–→←↗↑✓✕×•▾▴●›⚠")
 
 
 def _calls(tree, name):
@@ -37,15 +37,21 @@ class UiRulesTests(unittest.TestCase):
         bad = [f.name for f in UI_FILES if "️" in f.read_text(encoding="utf-8")]
         self.assertEqual(bad, [])
 
-    def test_button_text_uses_safe_glyphs(self):
+    def test_text_uses_safe_glyphs(self):
+        """Textes des boutons et libellés (police Segoe UI) : pas de symbole absent de la police. Les icônes en
+        police F_ICON (Segoe UI Symbol) ne sont pas concernées."""
         problems = []
         for f in sorted((PKG / "ui").glob("*.py")):
             tree = ast.parse(f.read_text(encoding="utf-8"))
-            for call in _calls(tree, "Btn"):
-                for text in _str_args(call):
-                    odd = {c for c in text if ord(c) > 0x24F and c not in SAFE_SYMBOLS}
-                    if odd:
-                        problems.append(f"{f.name}:{call.lineno} {text!r} {sorted(odd)}")
+            for name in ("Btn", "Label", "label", "configure", "set_text", "badge"):
+                for call in _calls(tree, name):
+                    font = next((k.value for k in call.keywords if k.arg == "font"), None)
+                    if isinstance(font, ast.Attribute) and font.attr == "F_ICON":
+                        continue
+                    for text in _str_args(call):
+                        odd = {c for c in text if ord(c) > 0x24F and c not in SAFE_SYMBOLS}
+                        if odd:
+                            problems.append(f"{f.name}:{call.lineno} {text!r} {sorted(odd)}")
         self.assertEqual(problems, [])
 
     def test_tables_use_shared_style(self):
@@ -79,7 +85,7 @@ class UiRulesTests(unittest.TestCase):
         widgets = (PKG / "ui" / "widgets.py").read_text(encoding="utf-8")
         app = (PKG / "ui" / "app.py").read_text(encoding="utf-8")
         self.assertIn("self.configure(bg=self._bg)", widgets[widgets.index("def _click"):])
-        self.assertIn("hover(False), command()", app)
+        self.assertIn("hover(row.winfo_containing(x, y) in parts)", app)
 
 
 if __name__ == "__main__":

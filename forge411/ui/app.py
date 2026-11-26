@@ -86,11 +86,20 @@ class App(tk.Tk):
             ic.configure(fg=T.ACCENT if on else T.FAINT)
             lb.configure(fg=T.TEXT if on else T.MUTED)
         for w in parts:
-            w.bind("<Enter>", lambda e: hover(True), add="+")
+            w.bind("<Enter>", lambda e: hover(row.winfo_containing(*row.winfo_pointerxy()) in parts), add="+")
             w.bind("<Leave>", lambda e: hover(row.winfo_containing(e.x_root, e.y_root) in parts), add="+")
             # survol retiré avant d'ouvrir une fenêtre : la fenêtre modale capte la sortie du pointeur,
             # la ligne restait surlignée à sa fermeture
-            w.bind("<Button-1>", lambda e: (hover(False), command()))
+            w.bind("<Button-1>", lambda e: on_click())
+
+        def on_click():
+            hover(False)
+            command()                    # une fenêtre modale bloque ici jusqu'à sa fermeture
+            try:                         # puis le survol suit la position réelle du pointeur (Windows renvoie un
+                x, y = row.winfo_pointerxy()      # « Enter » à la fin de la fenêtre modale)
+                hover(row.winfo_containing(x, y) in parts)
+            except tk.TclError:
+                pass
         return row
 
     def _github_link(self, parent) -> tk.Label:
@@ -727,7 +736,7 @@ class App(tk.Tk):
         if skipped:
             self.upd_chip.place_forget()
             return
-        self.upd_chip.configure(text=f"⬆  Forge411 {rel.version} disponible")
+        self.upd_chip.configure(text=f"↑  Forge411 {rel.version} disponible")
         self.upd_chip.place(relx=1.0, rely=0.0, anchor="ne")
 
     def open_update(self, force: bool = False):
