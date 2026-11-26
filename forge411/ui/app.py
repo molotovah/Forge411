@@ -163,6 +163,7 @@ class App(tk.Tk):
     def _validated(self, names):
         if not names:
             return
+        self._sweep_captures()
         more = f" (et {len(names) - 1} autre{'s' if len(names) > 2 else ''})" if len(names) > 1 else ""
         self.status.configure(text=f"Validé sur C411 : {names[0]}{more}")
         self._toast(f"Validé sur C411{more}", names[0])
@@ -189,16 +190,14 @@ class App(tk.Tk):
         self.after(30000, lambda: box.winfo_exists() and box.destroy())
 
     def _sweep_captures(self):
-        """Supprime les captures des releases publiées (images hébergées, liens dans la présentation)."""
+        """Supprime les captures des torrents validés par C411 (images hébergées, liens dans la présentation)."""
+        from .. import moderation as MOD
         from ..config import read_history, remove_captures
-        from .steps import fs_safe
         cfg = self.cfg
-        names = {h.get("name", "") for h in read_history() if h.get("action") in ("Publication", "Correction")}
 
         def work():
-            root = cfg.captures_dir
-            if root.is_dir():
-                remove_captures(cfg, *(root / fs_safe(n) for n in names if n))
+            if cfg.captures_dir.is_dir():
+                remove_captures(cfg, *MOD.validated_capture_dirs(cfg.captures_dir, read_history()))
         threading.Thread(target=work, daemon=True).start()
 
     # ── Construction ──────────────────────────────────────────────────────

@@ -1328,9 +1328,8 @@ class PublishStep(Step):
         s = self.s
         add_history({"name": s.name, "type": s.profile.label, "action": "Correction",
                      "url": (s.correction or {}).get("url", ""), "torrent": str(s.torrent), "infohash": s.infohash,
-                     "snapshot": str(UPLOADS_DIR / f"{s.infohash}.pkl")})
+                     "snapshot": str(UPLOADS_DIR / f"{s.infohash}.pkl"), **self._shots_entry()})
         fix, s.correction = s.correction, None
-        self._drop_captures()
         SESS.snapshot(s, UPLOADS_DIR / f"{s.infohash}.pkl")
         s.correction = fix
         self.fix_msg.configure(text="✓ Correction enregistrée dans l'historique. Surveille la discussion de "
@@ -1535,12 +1534,10 @@ class PublishStep(Step):
             return
         self._send("Publication", lambda api: api.upload(**self._payload()))
 
-    def _drop_captures(self):
-        """Supprime en arrière-plan le dossier des captures de cette release (partage réseau possible)."""
-        from ..config import remove_captures
-        cfg, s = self.app.cfg, self.s
-        dirs = (getattr(s, "shots_dir", None), cfg.captures_dir / fs_safe(s.name))
-        threading.Thread(target=remove_captures, args=(cfg, *dirs), daemon=True).start()
+    def _shots_entry(self) -> dict:
+        """Dossier des captures noté dans l'historique : supprimé quand C411 aura validé le torrent."""
+        d = getattr(self.s, "shots_dir", None)
+        return {"shots_dir": str(d)} if d else {}
 
     def _send(self, what, fn):
         try:
@@ -1561,9 +1558,8 @@ class PublishStep(Step):
                 SESS.snapshot(self.s, snap)
                 self.s.result = res
                 add_history({"name": self.s.name, "type": self.s.profile.label, "action": what, "url": res.url,
-                             "torrent": str(self.s.torrent), "infohash": self.s.infohash, "snapshot": str(snap)})
-                if what == "Publication":       # publiée : les captures locales ne servent plus
-                    self._drop_captures()
+                             "torrent": str(self.s.torrent), "infohash": self.s.infohash, "snapshot": str(snap),
+                             **self._shots_entry()})
             self.render_result(res)
             self.render_checks()
 

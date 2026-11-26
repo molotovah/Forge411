@@ -115,5 +115,23 @@ class CheckTests(unittest.TestCase):
         self.assertEqual(C.remove_history([bb]), 1)
 
 
+class CaptureCleanupTests(unittest.TestCase):
+    def test_only_validated_torrents_lose_their_captures(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            cfg = C.Config(out / "config.json")
+            cfg.update({"output_dir": str(out)})
+            root = cfg.captures_dir
+            for n in ("Release.aa-T", "Release.aa.v2-T", "Release.bb-T", "Brouillon-T"):
+                (root / n).mkdir(parents=True)
+                (root / n / "capture-01.png").write_bytes(b"png")
+            entries = [entry(ih="aa", c411_status="approved", shots_dir=str(root / "Release.aa-T")),
+                       entry(action="Correction", ih="aa", name="Release.aa.v2-T"),     # nom corrigé, même torrent
+                       entry(ih="bb"),                                                  # en attente : gardées
+                       entry(action="Brouillon", ih="", name="Brouillon-T")]
+            C.remove_captures(cfg, *M.validated_capture_dirs(root, entries))
+            self.assertEqual(sorted(p.name for p in root.iterdir()), ["Brouillon-T", "Release.bb-T"])
+
+
 if __name__ == "__main__":
     unittest.main()

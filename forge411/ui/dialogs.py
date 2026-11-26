@@ -742,6 +742,8 @@ class HistoryDialog(Dialog):
 
         def done(newly):
             self.status_note = ""
+            if newly and hasattr(self.app, "_sweep_captures"):
+                self.app._sweep_captures()          # validé : les captures locales ne servent plus
             if self.winfo_exists():
                 self.load()
         run_bg(lambda: MOD.check(api, items), done, lambda e: done([]))

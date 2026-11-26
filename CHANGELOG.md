@@ -2,7 +2,10 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [SemVer](https://semver.org/lang/fr/).
 
-## [Non publié]
+## [2.1.8] - 2026-11-26
+
+### Modifié
+- Captures : le dossier local d'une release est supprimé quand C411 a validé le torrent, et non plus dès l'envoi. Tant qu'il est en attente, elles restent disponibles si la Team Pending demande une modification.
 
 ### Corrigé
 - Menu latéral : la ligne cliquée (Historique, Mon profil…) restait surlignée après la fermeture de sa fenêtre.

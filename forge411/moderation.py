@@ -94,3 +94,23 @@ def check(api, entries: list, save: Callable = update_history, now: float = None
                 fields["c411_reason"] = str(d["rejectionReason"])
         save(ih, **fields)
     return newly
+
+
+def _safe(name: str) -> str:
+    return "".join("_" if c in '<>:"/\\|?*' else c for c in name).strip(" .") or "release"
+
+
+def validated_capture_dirs(captures_root, entries: list) -> list:
+    """Dossiers de captures des torrents validés par C411 : les images sont hébergées et leurs liens figurent
+    dans la présentation en ligne, la copie locale ne sert plus. En attente, les captures restent (une
+    modification demandée peut en réclamer de nouvelles)."""
+    from pathlib import Path
+    ok = {str(e.get("infohash", "")).lower() for e in entries if e.get("c411_status") == "approved"}
+    dirs = []
+    for e in entries:
+        if str(e.get("infohash", "")).lower() in ok and e.get("infohash"):
+            if e.get("shots_dir"):
+                dirs.append(Path(e["shots_dir"]))
+            if e.get("name"):
+                dirs.append(Path(captures_root) / _safe(e["name"]))
+    return list(dict.fromkeys(dirs))
