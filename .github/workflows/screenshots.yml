@@ -1,0 +1,66 @@
+name: Captures du README
+
+# À chaque version : régénère les captures du README avec les données de démonstration
+# (tools/screenshots.py) et les commite sur main si l'affichage a changé.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: screenshots
+  cancel-in-progress: false
+
+jobs:
+  screenshots:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Dépendances
+        run: python -m pip install -r requirements.txt
+      - name: Écran 1920 x 1080 (1024 x 768 par défaut, trop petit pour les fenêtres)
+        shell: pwsh
+        run: |
+          Set-DisplayResolution -Width 1920 -Height 1080 -Force
+          Add-Type -AssemblyName System.Windows.Forms
+          [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+      - name: Captures
+        run: python tools/screenshots.py
+      - name: Contrôle des images (pas de capture vide ou coupée)
+        shell: python
+        run: |
+          import sys
+          from pathlib import Path
+          from PIL import Image
+          sys.path.insert(0, "tools")
+          from screenshots import OUT, SHOTS
+          bad = []
+          for p in (OUT / name for name in SHOTS.values()):
+              img = Image.open(p).convert("RGB")
+              colors = img.getcolors(maxcolors=1 << 24) or []
+              top = max(c for c, _ in colors) / (img.width * img.height) if colors else 1
+              if len(colors) < 50 or top > 0.97:
+                  bad.append(f"{p.name} : {len(colors)} couleurs, {top:.0%} d'une seule")
+          if bad:
+              raise SystemExit("Capture suspecte, rien n'est commité :\n" + "\n".join(bad))
+      - name: Commit sur main si l'affichage a changé
+        shell: bash
+        run: |
+          git add docs/screenshots
+          if git diff --cached --quiet; then
+            echo "Captures inchangées."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Captures du README (${GITHUB_REF_NAME})"
+          git push origin HEAD:main
