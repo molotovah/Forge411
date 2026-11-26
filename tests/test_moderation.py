@@ -63,11 +63,19 @@ class LabelTests(unittest.TestCase):
         self.assertEqual(M.labels([pub, fix], NOW), ["En attente", "En attente"])
         self.assertEqual(M.labels([pub], NOW), ["À vérifier"])
 
-    def test_to_check_skips_drafts_validated_and_duplicates(self):
+    def test_to_check_skips_old_drafts_validated_and_duplicates(self):
         entries = [entry(ih="aa"), entry(action="Correction", ih="aa", date="2026-11-26 11:00"),
                    entry(ih="bb", c411_status="approved"), entry(action="Brouillon", ih="cc"),
-                   entry(ih="dd")]
-        self.assertEqual(M.to_check(entries), ["aa", "dd"])
+                   entry(action="Brouillon", ih="ee", date="2026-09-01 10:00"), entry(ih="dd")]
+        # brouillon récent suivi (publié peut-être depuis le site), brouillon de plus de 30 jours ignoré
+        self.assertEqual(M.to_check(entries, NOW), ["aa", "cc", "dd"])
+
+    def test_draft_published_from_site_counts_once_validated(self):
+        """Brouillon publié depuis la page d'upload du site : même info-hash, validé comme un upload."""
+        draft = entry(action="Brouillon", ih="cc", c411_status="approved")
+        self.assertEqual(M.label(draft, NOW), "Validé")
+        self.assertEqual(M.label(entry(action="Brouillon", ih="cc"), NOW), "—")
+        self.assertEqual(M.approved_count([draft]), 1)
 
 
 class CheckTests(unittest.TestCase):
@@ -191,6 +199,26 @@ class CaptureCleanupTests(unittest.TestCase):
             self.assertEqual(sorted(p.name for p in root.iterdir()), ["Brouillon-T.nfo", "Release.bb-T.nfo"])
             self.assertTrue((src / "Release.cc-T.nfo").exists())        # hors du dossier des NFO : jamais touché
 
+
+class OrphanCleanupTests(unittest.TestCase):
+    """Upload abandonné avant l'envoi : captures et NFO sans entrée dans l'historique, supprimés après 7 jours."""
+
+    def test_orphans_old_and_unknown_only(self):
+        import os
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            old = time.time() - 10 * 86400
+            for n in ("Abandon-T", "Release.aa-T", "EnCours-T", "Recent-T"):
+                (root / n).mkdir()
+            for n in ("Abandon-T", "Release.aa-T", "EnCours-T"):
+                os.utime(root / n, (old, old))
+            (root / "Abandon-T.nfo").write_text("x")
+            (root / "Release.aa-T.nfo").write_text("x")
+            for n in ("Abandon-T.nfo", "Release.aa-T.nfo"):
+                os.utime(root / n, (old, old))
+            entries = [entry(ih="aa")]                               # « Release.aa-T » : dans l'historique
+            self.assertEqual([p.name for p in M.orphans(root, entries, keep=["EnCours-T"])], ["Abandon-T"])
+            self.assertEqual([p.name for p in M.orphans(root, entries, suffix=".nfo")], ["Abandon-T.nfo"])
 
 if __name__ == "__main__":
     unittest.main()

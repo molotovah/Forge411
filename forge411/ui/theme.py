@@ -90,6 +90,7 @@ F_H2 = ("Segoe UI Semibold", 12)
 F_BIG = ("Segoe UI Semibold", 14)
 F_MONO = ("Cascadia Mono", 10)
 F_ICON = ("Segoe UI Symbol", 11)
+F_EMOJI = ("Segoe UI Emoji", 9)        # icônes des pastilles (types de contenu)
 
 
 def enable_dpi_awareness():

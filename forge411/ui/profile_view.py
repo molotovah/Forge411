@@ -9,7 +9,7 @@ from ..api import BASE
 from ..config import KEY_LINKS
 from . import theme as T
 from .dialogs import Dialog
-from .widgets import Btn, Card, Meter, ScrollFrame, Tooltip, autowrap, badge, label, run_bg
+from .widgets import Btn, Card, Meter, ScrollFrame, Tooltip, autowrap, badge, fit_font, label, run_bg
 
 PROFILE_URL = f"{BASE}/user/profile"
 MONTHS = ("janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre",
@@ -173,7 +173,7 @@ class ProfileDialog(Dialog):
         inner = tk.Frame(f, bg=T.SURFACE)
         inner.pack(fill="both", padx=(14 if col else 0, 0))
         label(inner, title, fg=T.MUTED, font=T.F_SMALL).pack(fill="x")
-        label(inner, value, fg=color, font=("Segoe UI Semibold", 20)).pack(fill="x", pady=(2, 0))
+        fit_font(label(inner, value, fg=color), "Segoe UI Semibold", 20).pack(fill="x", pady=(2, 0))
         autowrap(label(inner, sub, fg=T.FAINT, font=T.F_SMALL)).pack(fill="x")
         if tip:
             Tooltip(f, tip)
@@ -219,7 +219,7 @@ class ProfileDialog(Dialog):
         self._tile(grid, 2, "Zen", ("+" if t.zen >= 0 else "−") + P.fmt_int(abs(t.zen)), T.ACCENT,
                    f"{t.quests:+d} quête(s)" if t.quests else "aucune quête terminée")
         if t.days_to_next is not None:
-            eta = "moins d'un jour" if t.days_to_next < 1 else f"≈ {t.days_to_next:.0f} jour{'s' if t.days_to_next >= 2 else ''}"
+            eta = "< 1 jour" if t.days_to_next < 1 else f"≈ {t.days_to_next:.0f} jour{'s' if t.days_to_next >= 2 else ''}"
             sub = f"{P.fmt_int(int(t.xp_per_day))} XP par jour"
         else:
             eta, sub = "-", "pas d'XP gagnée sur la période"

@@ -24,5 +24,6 @@
 ## Captures d'écran
 - README : données de démonstration uniquement (profil « membre », chemins sous `C:\Users\Public\Forge411-demo`), jamais le compte, l'historique ni le nom d'utilisateur Windows réels.
 - `python tools/screenshots.py` (Windows) régénère toutes les captures du README et du wiki : fenêtres (Profil, Brouillons, Historique, Paramètres, À propos…) et assistant piloté sur les sources de démonstration (`tools/demo_wizard.py`, réutilise `tests/test_e2e.py`) ; `python tools/screenshots.py nom` pour une seule. Comparer avec `git diff`.
+- Captures régénérées en local : pour vérifier un affichage uniquement, ne pas les commiter (`git checkout docs/screenshots`) ; seules celles du workflow font foi.
 - À chaque tag `v*`, le workflow « Captures du README » (`.github/workflows/screenshots.yml`) les régénère sur Windows et les commite sur main (github-actions[bot]) si elles changent : faire `git pull` après une release.
 - Tests manuels sur la vraie app : sauvegarder `%APPDATA%\Forge411` avant, ne jamais publier ni envoyer de brouillon, supprimer ensuite les .torrent, NFO et captures créés.

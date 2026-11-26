@@ -2,6 +2,16 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [SemVer](https://semver.org/lang/fr/).
 
+## [2.5.1] - 2026-11-26
+
+### Ajouté
+- Nettoyage des uploads abandonnés : captures et NFO d'une release absente de l'historique (et de l'upload en cours ou à reprendre) supprimés après 7 jours.
+- Brouillons publiés depuis le site : suivis pendant 30 jours ; une fois validés par C411, ils passent « Validé » dans l'historique, comptent pour le statut d'uploader certifié, et leurs captures et NFO sont nettoyés.
+
+### Corrigé
+- Pastilles des types de contenu : icônes alignées sur le texte (dessinées à part, en police emoji).
+- Mon profil : les grandes valeurs des tuiles (« moins d'un jour »…) étaient rognées ; leur police se réduit maintenant pour tenir dans la tuile, et l'estimation du niveau suivant s'écrit « < 1 jour ».
+
 ## [2.5.0] - 2026-11-26
 
 ### Ajouté

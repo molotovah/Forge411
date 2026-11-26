@@ -140,6 +140,20 @@ class UiRulesTests(unittest.TestCase):
                     low.append(f"{mode} {fg}/{bg} {r:.2f}")
         self.assertEqual(low, [])
 
+    def test_badge_icon_in_emoji_font(self):
+        """Pastille « 🎬 Films & Vidéos » : dans la même chaîne que le texte, l'icône sort d'une police de secours,
+        plus petite et décalée vers le bas. Elle est dessinée à part, en police emoji."""
+        src = (PKG / "ui" / "widgets.py").read_text(encoding="utf-8")
+        body = src[src.index("class badge"):src.index("class IssueList")]
+        self.assertIn("font=T.F_EMOJI", body)
+        self.assertIn('icon, _, rest = text.partition(" ")', body)
+
+    def test_profile_big_values_fit(self):
+        """Mon profil : une valeur en 20 points (« moins d'un jour ») était rognée dans sa tuile."""
+        src = (PKG / "ui" / "profile_view.py").read_text(encoding="utf-8")
+        tile = src[src.index("    def _tile("):src.index("    def _tiles(")]
+        self.assertIn('fit_font(label(inner, value, fg=color), "Segoe UI Semibold", 20)', tile)
+
     def test_tables_use_shared_style(self):
         """Un ttk.Treeview sans style_tree garde la bordure claire et les en-têtes du thème par défaut."""
         bad = [f.name for f in sorted((PKG / "ui").glob("*.py"))

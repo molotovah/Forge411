@@ -426,6 +426,26 @@ def style_tree(widget):
     s.map("Treeview", background=[("selected", T.ACCENT_SOFT)], foreground=[("selected", T.TEXT)])
 
 
+def fit_font(lbl: tk.Label, family: str, size: int, smallest: int = 11) -> tk.Label:
+    """Valeur en gros caractères (tuile de statistiques) : la police se réduit, jusqu'à `smallest`, pour que le
+    texte tienne sur la largeur disponible au lieu d'être rogné."""
+    def fit(e=None):
+        width = lbl.winfo_width() - 4
+        if width < 20:
+            return
+        text = lbl.cget("text")
+        for s in range(size, smallest - 1, -1):
+            if _font((family, s)).measure(text) <= width or s == smallest:
+                if getattr(lbl, "_fit_size", None) != s:     # pas de reconfiguration inutile (ni de boucle)
+                    lbl._fit_size = s
+                    lbl.configure(font=(family, s))
+                return
+    lbl.configure(font=(family, size))
+    lbl._fit_size = size
+    lbl.bind("<Configure>", fit, add="+")
+    return lbl
+
+
 def autowrap(lbl: tk.Label) -> tk.Label:
     """Le texte se replie sur la largeur réellement disponible. Repli initial à 320 px en attendant la vraie
     largeur : sinon le libellé réclame d'abord tout son texte sur une ligne, et un encadré arrondi (qui ne
@@ -448,23 +468,37 @@ class badge(tk.Canvas):
     def __init__(self, parent, text: str, tone: str = "accent"):
         super().__init__(parent, bg=_parent_bg(parent), highlightthickness=0, bd=0)
         self.fill, fg = self.colors()[tone]
-        self._t = self.create_text(0, 0, text=text, fill=fg, font=T.F_SMALL_B, anchor="center")
+        # Icône en tête (« 🎬 Films & Vidéos ») : dessinée à part, en police emoji, centrée sur le texte. Dans la
+        # même chaîne, Tk la prend dans une police de secours plus petite et décalée vers le bas.
+        self._icon = self.create_text(0, 0, text="", fill=fg, font=T.F_EMOJI, anchor="w")
+        self._t = self.create_text(0, 0, text="", fill=fg, font=T.F_SMALL_B, anchor="w")
+        self._set(text)
+
+    def _set(self, text: str):
+        icon, _, rest = text.partition(" ")
+        if not (rest and icon and all(ord(c) > 0x2000 for c in icon)):
+            icon, rest = "", text
+        self.itemconfigure(self._icon, text=icon)
+        self.itemconfigure(self._t, text=rest)
         self._fit()
 
     def _fit(self):
-        f = _font(T.F_SMALL_B)
-        w = f.measure(self.itemcget(self._t, "text")) + 2 * T.px(self, 9)
-        h = f.metrics("linespace") + 2 * T.px(self, 2)
-        self.configure(width=w, height=h)
+        f, fi = _font(T.F_SMALL_B), _font(T.F_EMOJI)
+        icon = self.itemcget(self._icon, "text")
+        pad, gap = T.px(self, 9), T.px(self, 4)
+        iw = fi.measure(icon) + gap if icon else 0
+        w = pad + iw + f.measure(self.itemcget(self._t, "text")) + pad
+        h = max(f.metrics("linespace"), fi.metrics("linespace") if icon else 0) + 2 * T.px(self, 2)
+        tk.Canvas.configure(self, width=w, height=h)
         round_rect(self, w, h, h // 2, self.fill)
-        self.coords(self._t, w / 2, h / 2)
+        self.coords(self._icon, pad, h / 2)
+        self.coords(self._t, pad + iw, h / 2)
 
     def configure(self, cnf=None, **kw):
         text = kw.pop("text", None)
         res = super().configure(cnf, **kw) if (cnf or kw) else None
         if text is not None:
-            self.itemconfigure(self._t, text=text)
-            self._fit()
+            self._set(text)
         return res
 
     config = configure

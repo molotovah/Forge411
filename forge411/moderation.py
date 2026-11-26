@@ -15,6 +15,8 @@ from typing import Callable
 from .config import update_history
 
 PUBLISHED = ("Publication", "Correction")
+DRAFT_DAYS = 30                 # brouillons suivis : publiés depuis le site, leur validation se voit aussi
+ORPHAN_DAYS = 7                 # captures et NFO sans upload connu : supprimés passé ce délai
 STALE_DAYS = 3                  # sans validation au-delà : « À vérifier sur le site »
 CHECK_EVERY = 30 * 60           # secondes entre deux vérifications automatiques
 LABELS = {"approved": "Validé", "rejected": "Refusé", "pending": "En attente"}
@@ -39,9 +41,11 @@ def is_published(entry) -> bool:
 def label(entry, now: float = None, since: float = None) -> str:
     """Statut C411 affiché dans l'historique. since : dernière soumission de ce torrent (publication ou
     correction), point de départ du délai « À vérifier » ; par défaut la date de l'entrée."""
+    st = entry.get("c411_status")
+    if st == "approved":                            # brouillon compris, s'il a été publié depuis le site
+        return LABELS[st]
     if not is_published(entry):
         return "—"                                  # brouillon : pas encore soumis à la Team Pending
-    st = entry.get("c411_status")
     if st:
         return LABELS.get(st, st)
     now = now or time.time()
@@ -62,12 +66,21 @@ def labels(entries: list, now: float = None) -> list:
     return [label(e, now, last.get(str(e.get("infohash", "")).lower())) for e in entries]
 
 
-def to_check(entries: list) -> list:
-    """Infohashes des uploads publiés pas encore validés (un par torrent, l'entrée la plus ancienne en premier)."""
+def is_recent_draft(entry, now: float = None) -> bool:
+    """Brouillon envoyé depuis moins de DRAFT_DAYS jours : il a pu être publié depuis la page d'upload du site.
+    L'info-hash ne change pas à la publication (source C411 déjà dans le torrent) : le suivre comme un upload."""
+    now = now or time.time()
+    return ("Brouillon" in (entry.get("action") or "") and bool(entry.get("infohash"))
+            and now - _date(entry) < DRAFT_DAYS * 86400)
+
+
+def to_check(entries: list, now: float = None) -> list:
+    """Infohashes à interroger : uploads publiés pas encore validés, et brouillons récents (publiés peut-être
+    depuis le site). Un par torrent, l'entrée la plus ancienne en premier."""
     seen, out = set(), []
     for e in sorted(entries, key=_date):
         ih = str(e.get("infohash", "")).lower()
-        if is_published(e) and ih not in seen and e.get("c411_status") != "approved":
+        if (is_published(e) or is_recent_draft(e, now)) and ih not in seen and e.get("c411_status") != "approved":
             seen.add(ih)
             out.append(ih)
     validated = {str(e.get("infohash", "")).lower() for e in entries if e.get("c411_status") == "approved"}
@@ -102,9 +115,10 @@ def check(api, entries: list, save: Callable = update_history, now: float = None
 
 
 def approved_count(entries: list) -> int:
-    """Torrents validés sur C411 d'après l'historique (un par info-hash)."""
+    """Torrents validés sur C411 d'après l'historique (un par info-hash), brouillons publiés depuis le site
+    compris."""
     return len({str(e.get("infohash", "")).lower() for e in entries
-                if is_published(e) and e.get("c411_status") == "approved"})
+                if e.get("infohash") and e.get("c411_status") == "approved"})
 
 
 def is_certified(entries: list, declared: bool = False) -> bool:
@@ -145,6 +159,32 @@ def validated_nfo_files(nfo_root, entries: list) -> list:
             if e.get("name"):
                 files.append(Path(nfo_root) / f"{_safe(e['name'])}.nfo")
     return list(dict.fromkeys(files))
+
+
+def orphans(root, entries: list, keep=(), now: float = None, max_age_days: float = ORPHAN_DAYS,
+            suffix: str = "") -> list:
+    """Captures (dossiers) ou NFO (suffix=".nfo") de releases inconnues de l'historique et de l'upload en cours,
+    plus vieux que max_age_days : uploads abandonnés avant l'envoi, que rien d'autre ne nettoie. keep : noms de
+    release à garder (upload en cours)."""
+    from pathlib import Path
+    root = Path(root)
+    if not root.is_dir():
+        return []
+    now = now or time.time()
+    known = {_safe(n) for n in [e.get("name", "") for e in entries] + list(keep) if n}
+    known |= {Path(e[k]).name for e in entries for k in ("shots_dir", "nfo") if e.get(k)}
+    out = []
+    for p in root.iterdir():
+        if not (p.suffix.lower() == suffix if suffix else p.is_dir()):
+            continue
+        name = p.name[:-len(suffix)] if suffix else p.name
+        try:
+            old = now - p.stat().st_mtime > max_age_days * 86400
+        except OSError:
+            continue
+        if old and name not in known and p.name not in known:
+            out.append(p)
+    return sorted(out)
 
 
 def _safe(name: str) -> str:

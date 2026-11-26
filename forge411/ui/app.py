@@ -210,12 +210,19 @@ class App(tk.Tk):
         from ..config import read_history, remove_captures, remove_nfos
         cfg = self.cfg
 
+        keep = []                                  # upload en cours, et celui proposé à la reprise
+        for s in (self.session, SESS.load(SESSION_PATH)):
+            if s is not None:
+                keep += [n for n in (s.name, s.src.path.name if s.src else "") if n]
+
         def work():
             hist = read_history()
             if cfg.captures_dir.is_dir():
-                remove_captures(cfg, *MOD.validated_capture_dirs(cfg.captures_dir, hist))
+                remove_captures(cfg, *MOD.validated_capture_dirs(cfg.captures_dir, hist),
+                                *MOD.orphans(cfg.captures_dir, hist, keep))           # uploads abandonnés
             if cfg.nfo_dir.is_dir():
-                remove_nfos(cfg, *MOD.validated_nfo_files(cfg.nfo_dir, hist))
+                remove_nfos(cfg, *MOD.validated_nfo_files(cfg.nfo_dir, hist),
+                            *MOD.orphans(cfg.nfo_dir, hist, keep, suffix=".nfo"))
         threading.Thread(target=work, daemon=True).start()
 
     # ── Construction ──────────────────────────────────────────────────────
