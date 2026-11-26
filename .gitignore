@@ -12,3 +12,4 @@ config.json
 *.nfo
 *.log
 *.tmp
+.playwright-mcp/
