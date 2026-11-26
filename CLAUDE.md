@@ -17,6 +17,10 @@
 - Dimensions fixes en pixels : `T.px(widget, n)` (affichage Windows à 125 %, 150 %).
 - Tester sous Windows avec Python 3.13 (même Tk 8.6 que l'exe), pas 3.14.
 
+## Documentation
+- README = vitrine courte (accroche, aperçu, démarrage rapide, liens). Le guide détaillé va dans le wiki : `docs/wiki/*.md`, publié sur le wiki GitHub par le workflow « Wiki » à chaque push sur main (ne jamais éditer le wiki sur le site : écrasé).
+- Wiki : images en URL absolue `https://raw.githubusercontent.com/molotovah/Forge411/main/docs/screenshots/…`, liens entre pages par nom de page (`[Texte](Nom-de-page)`, `<…>` si accents). `tests/test_docs.py` vérifie liens et images.
+
 ## Captures d'écran
 - README : données de démonstration uniquement (profil « membre », chemins sous `C:\Users\Public\Forge411-demo`), jamais le compte, l'historique ni le nom d'utilisateur Windows réels.
 - `python tools/screenshots.py` (Windows) régénère Profil, Brouillons, Historique, la notification de validation, les Paramètres (compte, client torrent) et À propos ; comparer avec `git diff`.

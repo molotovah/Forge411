@@ -1,0 +1,1 @@
+[Forge411](https://github.com/molotovah/Forge411) par [molotovah](https://github.com/molotovah) · Licence [GNU GPL v3](https://github.com/molotovah/Forge411/blob/main/LICENSE) · Non affilié à C411 · Ce wiki est généré depuis `docs/wiki/` du dépôt : propose tes corrections par une pull request.

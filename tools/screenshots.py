@@ -3,6 +3,7 @@
     python tools/screenshots.py            → docs/screenshots/ : Profil, Brouillons, Historique, notification de
                                              validation, Paramètres (compte, client torrent), À propos
     python tools/screenshots.py historique → une seule fenêtre
+    python tools/screenshots.py profil-clair → la même en thème clair (README : <picture> clair / sombre)
 
 Aucune donnée personnelle : profil « membre », brouillons et historique fictifs, chemins sous
 C:\\Users\\Public\\Forge411-demo, configuration et historique dans un dossier temporaire. Comparer les
@@ -10,6 +11,7 @@ nouvelles images aux précédentes (git diff) montre tout changement d'affichage
 """
 
 import json
+import os
 import sys
 import tempfile
 import time
@@ -19,6 +21,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+
+LIGHT = "-clair"
+if len(sys.argv) == 2 and sys.argv[1].endswith(LIGHT):
+    # Le thème est lu dans la configuration à l'import de l'interface : configuration temporaire en thème clair,
+    # avant tout import de forge411 (aucune configuration réelle n'est lue ni modifiée)
+    _cfg = Path(tempfile.mkdtemp()) / "Forge411"
+    _cfg.mkdir()
+    (_cfg / "config.json").write_text(json.dumps({"theme": "light", "theme_chosen": True}), encoding="utf-8")
+    os.environ["APPDATA"] = str(_cfg.parent)
 
 from forge411 import config as C, profile as P  # noqa: E402
 from forge411.ui import theme as T  # noqa: E402
@@ -32,6 +43,9 @@ NOW = time.mktime((2026, 11, 26, 18, 0, 0, 0, 0, -1))
 SHOTS = {"profil": "19-profil.png", "brouillons": "21-brouillons.png", "historique": "25-historique.png",
          "validation": "26-validation.png", "parametres": "10-parametres.png",
          "parametres-client": "18-parametres-client.png", "a-propos": "23-a-propos.png"}
+# Variantes claires des captures du README (balise <picture> : suit le thème GitHub du visiteur)
+SHOTS.update({k + LIGHT: SHOTS[k].replace(".png", LIGHT + ".png")
+              for k in ("profil", "brouillons", "historique", "parametres-client")})
 
 # Paramètres de démonstration : clés factices (masquées à l'écran), client qBittorrent sur un NAS
 DEMO_SETTINGS = {"c411_api_key": "demo-0000-0000-0000", "tracker_url": "https://c411.org/announce/demo-passkey-0000",
@@ -97,7 +111,8 @@ def demo_history():
         + "\n" for d, n, t, a, p, ih, extra in rows), encoding="utf-8")
 
 
-def shoot(kind: str):
+def shoot(name: str):
+    kind = name.removesuffix(LIGHT)
     from PIL import ImageGrab
     from forge411.ui.widgets import UI
     time.time = lambda: NOW                   # statuts « En attente » / « À vérifier », délais du profil
@@ -153,9 +168,9 @@ def shoot(kind: str):
         d.update()
         x, y = d.winfo_rootx(), d.winfo_rooty()
         ImageGrab.grab(bbox=(x, y, x + d.winfo_width(), y + d.winfo_height()), all_screens=True).save(
-            OUT / SHOTS[kind])
+            OUT / SHOTS[name])
         root.destroy()
-        print("->", OUT / SHOTS[kind])          # ASCII : la console Windows (cp1252) refuse « → »
+        print("->", OUT / SHOTS[name])          # ASCII : la console Windows (cp1252) refuse « → »
     root.after(2500, grab)
     root.mainloop()
 

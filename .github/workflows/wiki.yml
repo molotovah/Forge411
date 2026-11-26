@@ -1,0 +1,39 @@
+name: Wiki
+
+# Publie docs/wiki/ du dépôt sur le wiki GitHub à chaque modification sur main. Le wiki est une copie :
+# toute modification faite directement sur le site serait écrasée au prochain envoi.
+
+on:
+  push:
+    branches: [main]
+    paths: ["docs/wiki/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wiki
+  cancel-in-progress: false
+
+jobs:
+  wiki:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Récupération du wiki
+        run: git clone "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git" wiki
+      - name: Copie des pages
+        run: rsync -a --delete --exclude .git docs/wiki/ wiki/
+      - name: Publication si les pages ont changé
+        working-directory: wiki
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Wiki inchangé."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Wiki depuis ${GITHUB_SHA::7}"
+          git push
