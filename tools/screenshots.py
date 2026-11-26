@@ -1,6 +1,7 @@
 """Captures d'écran du README avec des données de démonstration (Windows).
 
-    python tools/screenshots.py            → docs/screenshots/19-profil.png, 21-brouillons.png, 25-historique.png
+    python tools/screenshots.py            → docs/screenshots/ : Profil, Brouillons, Historique, notification de
+                                             validation, Paramètres (compte, client torrent), À propos
     python tools/screenshots.py historique → une seule fenêtre
 
 Aucune donnée personnelle : profil « membre », brouillons et historique fictifs, chemins sous
@@ -29,7 +30,15 @@ DEMO = Path(r"C:\Users\Public\Forge411-demo")
 NOW = time.mktime((2026, 11, 26, 18, 0, 0, 0, 0, -1))
 
 SHOTS = {"profil": "19-profil.png", "brouillons": "21-brouillons.png", "historique": "25-historique.png",
-         "validation": "26-validation.png"}
+         "validation": "26-validation.png", "parametres": "10-parametres.png",
+         "parametres-client": "18-parametres-client.png", "a-propos": "23-a-propos.png"}
+
+# Paramètres de démonstration : clés factices (masquées à l'écran), client qBittorrent sur un NAS
+DEMO_SETTINGS = {"c411_api_key": "demo-0000-0000-0000", "tracker_url": "https://c411.org/announce/demo-passkey-0000",
+                 "tmdb_api_key": "demo-tmdb", "rawg_api_key": "demo-rawg", "tpdb_api_key": "demo-tpdb",
+                 "client_kind": "qbittorrent", "client_url": "http://192.168.1.10:8080", "client_user": "admin",
+                 "client_password": "demo", "client_label": "C411", "client_path_local": "\\\\NAS\\Torrents",
+                 "client_path_remote": "/downloads"}
 
 
 class DemoApi:
@@ -111,6 +120,17 @@ def shoot(kind: str):
     elif kind == "brouillons":
         from forge411.ui.drafts_view import DraftsDialog
         d = DraftsDialog(root)
+    elif kind in ("parametres", "parametres-client"):
+        from forge411.ui.dialogs import SettingsDialog
+        root.cfg.update(DEMO_SETTINGS)
+        d = SettingsDialog(root, root.cfg, first_run=kind == "parametres")
+        if kind == "parametres-client":
+            d.select("client")
+            d.client_msg.configure(text="✓  qBittorrent v5.1.2 connecté", fg=T.SUCCESS)   # sans client réel
+    elif kind == "a-propos":
+        from forge411.ui.about_view import AboutDialog
+        root._icon = tk.PhotoImage(file=str(ROOT / "forge411" / "assets" / "forge411.png"))   # logo, comme l'app
+        d = AboutDialog(root)
     elif kind == "validation":                 # notification « Validé sur C411 » (coin de la fenêtre principale)
         from forge411.ui.app import App
         root.geometry("760x300+40+40")
