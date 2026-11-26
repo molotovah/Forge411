@@ -2,6 +2,11 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [SemVer](https://semver.org/lang/fr/).
 
+## [2.5.2] - 2026-11-26
+
+### Corrigé
+- Fenêtre figée sur certaines pages (étape Source d'un album, par exemple) : la barre de défilement apparaissait et disparaissait sans fin, chaque changement de largeur faisant replier autrement les textes. Sa place est maintenant toujours réservée.
+
 ## [2.5.1] - 2026-11-26
 
 ### Ajouté

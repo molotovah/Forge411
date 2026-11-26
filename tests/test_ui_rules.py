@@ -154,6 +154,14 @@ class UiRulesTests(unittest.TestCase):
         tile = src[src.index("    def _tile("):src.index("    def _tiles(")]
         self.assertIn('fit_font(label(inner, value, fg=color), "Segoe UI Semibold", 20)', tile)
 
+    def test_scrollbar_width_reserved(self):
+        """Barre de défilement qui apparaît / disparaît en changeant la largeur : les textes repliés changent de
+        hauteur et la font réapparaître, boucle sans fin (étape Source d'un album, capture bloquée en CI)."""
+        src = (PKG / "ui" / "widgets.py").read_text(encoding="utf-8")
+        sf = src[src.index("class ScrollFrame"):src.index("class TextArea")]
+        self.assertIn("self._spacer = tk.Frame(self, bg=bg, width=self.vsb.winfo_reqwidth())", sf)
+        self.assertIn("self._spacer.pack(side=\"right\", fill=\"y\")", sf)
+
     def test_tables_use_shared_style(self):
         """Un ttk.Treeview sans style_tree garde la bordure claire et les en-têtes du thème par défaut."""
         bad = [f.name for f in sorted((PKG / "ui").glob("*.py"))

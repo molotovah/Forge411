@@ -336,5 +336,5 @@ if __name__ == "__main__":
         shoot(kinds[0])
     else:                                    # un processus par fenêtre : Tk n'aime pas deux racines successives
         import subprocess
-        for k in kinds:
-            subprocess.run([sys.executable, __file__, k], check=True)
+        for k in kinds:                      # délai maximal : une capture bloquée échoue au lieu de tout figer
+            subprocess.run([sys.executable, __file__, k], check=True, timeout=180)

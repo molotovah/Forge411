@@ -291,6 +291,11 @@ class ScrollFrame(tk.Frame):
         super().__init__(parent, bg=bg, **kw)
         self.canvas = tk.Canvas(self, bg=bg, highlightthickness=0, bd=0)
         self.vsb = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        # Place de la barre toujours réservée (espace vide quand elle ne sert pas) : si elle apparaissait et
+        # disparaissait en changeant la largeur, les textes repliés changeraient de hauteur, ce qui la ferait
+        # réapparaître… boucle sans fin (fenêtre figée sur certaines pages).
+        self._spacer = tk.Frame(self, bg=bg, width=self.vsb.winfo_reqwidth())
+        self._spacer.pack(side="right", fill="y")
         self.inner = tk.Frame(self.canvas, bg=bg)
         self._win = self.canvas.create_window((0, 0), window=self.inner, anchor="nw")
         self.canvas.configure(yscrollcommand=self._on_scroll)
@@ -317,8 +322,11 @@ class ScrollFrame(tk.Frame):
 
     def _on_scroll(self, lo, hi):
         if float(lo) <= 0 and float(hi) >= 1:
-            self.vsb.pack_forget()
-        elif not self.vsb.winfo_ismapped():
+            if self.vsb.winfo_manager():
+                self.vsb.pack_forget()
+                self._spacer.pack(side="right", fill="y")
+        elif not self.vsb.winfo_manager():
+            self._spacer.pack_forget()
             self.vsb.pack(side="right", fill="y")
         self.vsb.set(lo, hi)
 
