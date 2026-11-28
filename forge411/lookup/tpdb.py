@@ -60,6 +60,7 @@ def clean_query(q: str) -> str:
     """« [Brazzers].2024.01.02.Titre.Kenna.James.1080p… » → « Brazzers 2024 01 02 Titre Kenna James »."""
     q = re.sub(r"-[A-Za-z0-9]+$", "", q)
     q = re.sub(r"\[([^\]]+)\]", r" \1 ", q)
+    q = re.sub(r"\b((?:19|20)\d\d)-(\d\d)-(\d\d)\b", r"\1 \2 \3", q)     # date 2023-06-27
     q = re.sub(r"[._]+", " ", q)
     q = re.split(TECH, q, flags=re.I)[0]
     return re.sub(r"\s+", " ", q).strip()
@@ -69,7 +70,8 @@ def queries(raw: str) -> list:
     """Requêtes à essayer, de la plus précise à la plus large : [(mode, texte)].
 
     mode « parse » : analyse du nom par ThePornDB (format Studio.AA.MM.JJ.Interprètes.Titre) ;
-    mode « q » : recherche plein texte (sans date ni tags techniques, puis sans le studio)."""
+    mode « q » : recherche plein texte (sans date ni tags techniques, puis sans le studio) ;
+    en dernier, studio + date seuls (un interprète du nom peut manquer sur la fiche)."""
     base = clean_query(raw)
     words = base.split()
     out = []
@@ -79,6 +81,7 @@ def queries(raw: str) -> list:
         out.append(("parse", f"{studio}.{yy}.{mm}.{dd}.{rest.replace(' ', '.')}"))
         out.append(("q", f"{m.group(1)} {rest}"))
         out.append(("q", rest))
+        out.append(("parse", f"{studio}.{yy}.{mm}.{dd}"))
     else:
         out.append(("q", base))
         if len(words) > 3:

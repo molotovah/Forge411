@@ -567,6 +567,21 @@ class TpdbTests(unittest.TestCase):
                          ("parse", "BadoinkVR.22.06.28.Kenna.James.Her.Biggest.Fan"))
         self.assertEqual(queries("Dating My Stepson"), [("q", "Dating My Stepson")])
 
+    def test_dashed_date_and_unknown_performer(self):
+        """Date « 2023-06-27 » reconnue ; interprète absent de la fiche (Lexi Anne) : repli sur studio + date."""
+        from forge411.lookup.tpdb import clean_query, queries
+        name = "[ExCoGiGirls] 2023-06-27 High on Orgasms Lena Anderson Lexi Anne Web-DL 4k"
+        self.assertEqual(clean_query(name), "ExCoGiGirls 2023 06 27 High on Orgasms Lena Anderson Lexi Anne")
+        q = queries(name)
+        self.assertEqual(q[0], ("parse", "ExCoGiGirls.23.06.27.High.on.Orgasms.Lena.Anderson.Lexi.Anne"))
+        self.assertIn(("parse", "ExCoGiGirls.23.06.27"), q)
+        self.assertEqual(clean_query("[Brazzers] Titre-Truc 1080p"), "Brazzers Titre-Truc")   # autres tirets gardés
+        hit = dict(self.SCENE, title="High on Orgasms", date="2023-06-27")
+        c = self._client({})
+        c.http.get.side_effect = lambda path, **kw: {"data": [hit]} if kw.get("parse") == "ExCoGiGirls.23.06.27" \
+            else {"data": []}
+        self.assertEqual([m.title for m in c.search(name, "2023")], ["High on Orgasms"])
+
     def test_search_and_payload(self):
         c = self._client({"/scenes": {"data": [self.SCENE, {"id": 9, "title": "sans uuid"}]},
                           f"/scenes/{self.UID}": {"data": self.SCENE}})

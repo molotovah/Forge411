@@ -2,6 +2,11 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions : [SemVer](https://semver.org/lang/fr/).
 
+## [2.5.3] - 2026-11-28
+
+### Corrigé
+- ThePornDB : les noms datés avec des tirets (« [Studio] 2023-06-27 Titre… ») ne trouvaient aucune scène, la date n'étant pas reconnue. Si un interprète du nom manque sur la fiche, la recherche se replie maintenant sur le studio et la date.
+
 ## [2.5.2] - 2026-11-26
 
 ### Corrigé
